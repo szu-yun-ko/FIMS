@@ -158,7 +158,11 @@ class CatchAtAge : public FisheryModelBase<Type> {
       }
 
       this->populations[p]->partition_spec = MakeDefaultSexPartitionSpec();
-      this->populations[p]->partition_demand = MakePooledPartitionDemand();
+      // Do not reset partition_demand here: user demand is copied from
+      // PopulationInterface in add_to_fims_tmb before CreateModel/Initialize.
+      // Population defaults to pooled when unset.
+      ValidatePartitionDemand(this->populations[p]->partition_spec,
+                              this->populations[p]->partition_demand);
       this->populations[p]->index_layout.n_years = this->populations[p]->n_years;
       this->populations[p]->index_layout.n_ages = this->populations[p]->n_ages;
       this->populations[p]->index_layout.n_strata =
@@ -742,11 +746,13 @@ class CatchAtAge : public FisheryModelBase<Type> {
       Type catch_waa = fdq_["catch_numbers_at_age"][i_age_year] *
                        population->growth->evaluate(year, population->ages[age]);
       fdq_["catch_weight_at_age"][i_age_year] = catch_waa;
-      fims_popdy::WritePartitionedQuantityAtAge(
-          fdq_["catch_weight_at_age_by_partition"], catch_waa,
-          population->partition_spec, population->index_layout,
-          population->partition_demand,
-          population->proportion_female.get_force_scalar(age), year, age);
+      if (!population->partition_demand.is_pooled()) {
+        fims_popdy::WritePartitionedQuantityAtAge(
+            fdq_["catch_weight_at_age_by_partition"], catch_waa,
+            population->partition_spec, population->index_layout,
+            population->partition_demand,
+            population->proportion_female.get_force_scalar(age), year, age);
+      }
     }
   }
 
@@ -786,11 +792,13 @@ class CatchAtAge : public FisheryModelBase<Type> {
           pdq_["mortality_Z"][i_age_year] * pdq_["numbers_at_age"][i_age_year] *
           (1 - fims_math::exp(-(pdq_["mortality_Z"][i_age_year])));
       fdq_["catch_numbers_at_age"][i_age_year] += catch_naa;
-      fims_popdy::WritePartitionedQuantityAtAge(
-          fdq_["catch_numbers_at_age_by_partition"], catch_naa,
-          population->partition_spec, population->index_layout,
-          population->partition_demand,
-          population->proportion_female.get_force_scalar(age), year, age);
+      if (!population->partition_demand.is_pooled()) {
+        fims_popdy::WritePartitionedQuantityAtAge(
+            fdq_["catch_numbers_at_age_by_partition"], catch_naa,
+            population->partition_spec, population->index_layout,
+            population->partition_demand,
+            population->proportion_female.get_force_scalar(age), year, age);
+      }
     }
   }
 
@@ -858,11 +866,13 @@ class CatchAtAge : public FisheryModelBase<Type> {
                population->ages[age], year)) *
           pdq_["numbers_at_age"][i_age_year];
       fdq_["index_numbers_at_age"][i_age_year] += index_naa;
-      fims_popdy::WritePartitionedQuantityAtAge(
-          fdq_["index_numbers_at_age_by_partition"], index_naa,
-          population->partition_spec, population->index_layout,
-          population->partition_demand,
-          population->proportion_female.get_force_scalar(age), year, age);
+      if (!population->partition_demand.is_pooled()) {
+        fims_popdy::WritePartitionedQuantityAtAge(
+            fdq_["index_numbers_at_age_by_partition"], index_naa,
+            population->partition_spec, population->index_layout,
+            population->partition_demand,
+            population->proportion_female.get_force_scalar(age), year, age);
+      }
     }
   }
 
@@ -891,11 +901,13 @@ class CatchAtAge : public FisheryModelBase<Type> {
       Type index_waa = fdq_["index_numbers_at_age"][i_age_year] *
                        population->growth->evaluate(year, population->ages[age]);
       fdq_["index_weight_at_age"][i_age_year] = index_waa;
-      fims_popdy::WritePartitionedQuantityAtAge(
-          fdq_["index_weight_at_age_by_partition"], index_waa,
-          population->partition_spec, population->index_layout,
-          population->partition_demand,
-          population->proportion_female.get_force_scalar(age), year, age);
+      if (!population->partition_demand.is_pooled()) {
+        fims_popdy::WritePartitionedQuantityAtAge(
+            fdq_["index_weight_at_age_by_partition"], index_waa,
+            population->partition_spec, population->index_layout,
+            population->partition_demand,
+            population->proportion_female.get_force_scalar(age), year, age);
+      }
     }
   }
 
