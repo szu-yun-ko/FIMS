@@ -16,6 +16,53 @@
 namespace fims_popdy {
 
 /**
+ * @brief Sex-structure model used for population dynamics.
+ *
+ * @details Orthogonal to PartitionDemand, which only chooses which output
+ * planes to fill. Model 1 (`sex_ratio_at_age`) keeps pooled dynamics and
+ * splits on write. Model 3 (`explicit_two_sex`) uses per-sex dynamics.
+ * `implicit_two_sex` is not implemented yet and is rejected by the parser.
+ */
+enum class SexStructure {
+  kSexRatioAtAge, /*!< Model 1: pooled calc + split-on-write */
+  kExplicitTwoSex /*!< Model 3: per-sex dynamics */
+};
+
+/** @brief Default sex structure (Model 1). */
+inline constexpr SexStructure kDefaultSexStructure =
+    SexStructure::kSexRatioAtAge;
+
+/**
+ * @brief Convert a SexStructure value to its user-facing name.
+ */
+inline const char *SexStructureToString(SexStructure value) {
+  switch (value) {
+    case SexStructure::kSexRatioAtAge:
+      return "sex_ratio_at_age";
+    case SexStructure::kExplicitTwoSex:
+      return "explicit_two_sex";
+  }
+  throw std::invalid_argument("SexStructureToString: unhandled SexStructure");
+}
+
+/**
+ * @brief Parse a user-facing sex_structure name.
+ *
+ * @param name One of "sex_ratio_at_age" or "explicit_two_sex".
+ */
+inline SexStructure SexStructureFromString(const std::string &name) {
+  if (name == "sex_ratio_at_age") {
+    return SexStructure::kSexRatioAtAge;
+  }
+  if (name == "explicit_two_sex") {
+    return SexStructure::kExplicitTwoSex;
+  }
+  throw std::invalid_argument(
+      "SexStructureFromString: unknown sex_structure \"" + name +
+      "\". Allowed values: \"sex_ratio_at_age\", \"explicit_two_sex\".");
+}
+
+/**
  * @brief One partition axis (e.g. sex with levels female and male).
  */
 struct Axis {
