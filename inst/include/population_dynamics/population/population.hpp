@@ -75,6 +75,8 @@ annual fishing mortality multipliers to scale total mortality of all fleets*/
   IndexLayout index_layout;     /*!< folded indices for partitioned quantities */
   PartitionDemand partition_demand =
       MakePooledPartitionDemand(); /*!< which strata to materialize; empty = pooled */
+  SexStructure sex_structure =
+      kDefaultSexStructure; /*!< sex-structure model; orthogonal to partition_demand */
 
   /**
    * @brief Constructor.

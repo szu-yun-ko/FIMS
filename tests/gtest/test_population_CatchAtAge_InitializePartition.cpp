@@ -19,6 +19,17 @@ TEST_F(CAAInitializeTestFixture, InitializeSetsDefaultSexPartition) {
   EXPECT_TRUE(fims_popdy::RequestedStrata(population->partition_spec,
                                           population->partition_demand)
                   .empty());
+
+  EXPECT_EQ(population->sex_structure, fims_popdy::SexStructure::kSexRatioAtAge);
+}
+
+TEST_F(CAAInitializeTestFixture, InitializePreservesPreSetSexStructure) {
+  population->sex_structure = fims_popdy::SexStructure::kExplicitTwoSex;
+
+  catch_at_age_model->Initialize();
+
+  EXPECT_EQ(population->sex_structure,
+            fims_popdy::SexStructure::kExplicitTwoSex);
 }
 
 }  // namespace
