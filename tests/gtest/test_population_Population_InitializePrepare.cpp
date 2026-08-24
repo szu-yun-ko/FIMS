@@ -141,5 +141,61 @@ namespace
         }
         
     }
+
+    TEST_F(CAAPrepareTestFixture,
+           ExplicitTwoSexPooledLogMDuplicatesToPartitionedMortalityM) {
+        catch_at_age_model->populations[0]->sex_structure =
+            fims_popdy::SexStructure::kExplicitTwoSex;
+        this->InitializeCAA();
+        catch_at_age_model->Prepare();
+
+        auto &population = catch_at_age_model->populations[0];
+        auto &dq = catch_at_age_model->GetPopulationDerivedQuantities(1);
+        const size_t n_strata =
+            fims_popdy::MakeDefaultSexPartitionSpec().n_strata();
+
+        for (size_t age = 0; age < static_cast<size_t>(n_ages); age++) {
+            for (size_t year = 0; year < static_cast<size_t>(n_years); year++) {
+                const size_t i_age_year = age * n_years + year;
+                const double expected_m = fims_math::exp(population->log_M[i_age_year]);
+                for (size_t stratum = 0; stratum < n_strata; stratum++) {
+                    const size_t i_stratum_age_year =
+                        stratum * (n_years * n_ages) + i_age_year;
+                    EXPECT_EQ(dq["mortality_M_by_partition"][i_stratum_age_year],
+                              expected_m);
+                }
+            }
+        }
+    }
+
+    TEST_F(CAAPrepareTestFixture,
+           ExplicitTwoSexPartitionedLogMFillsMortalityMByPartition) {
+        catch_at_age_model->populations[0]->sex_structure =
+            fims_popdy::SexStructure::kExplicitTwoSex;
+        this->InitializeCAA();
+        auto &population = catch_at_age_model->populations[0];
+        const size_t n_strata =
+            fims_popdy::MakeDefaultSexPartitionSpec().n_strata();
+        const size_t pooled_size = static_cast<size_t>(n_years * n_ages);
+        population->log_M.resize(n_strata * pooled_size);
+        for (size_t stratum = 0; stratum < n_strata; stratum++) {
+            for (size_t i = 0; i < pooled_size; i++) {
+                population->log_M[stratum * pooled_size + i] =
+                    fims_math::log(static_cast<double>(0.2 + 0.1 * stratum));
+            }
+        }
+
+        catch_at_age_model->Prepare();
+        auto &dq = catch_at_age_model->GetPopulationDerivedQuantities(1);
+        const double female_m = fims_math::exp(fims_math::log(0.2));
+        const double male_m = fims_math::exp(fims_math::log(0.3));
+        const double pooled_m = (female_m + male_m) / 2.0;
+        for (size_t i = 0; i < pooled_size; i++) {
+            EXPECT_DOUBLE_EQ(dq["mortality_M_by_partition"][i], female_m);
+            EXPECT_DOUBLE_EQ(dq["mortality_M_by_partition"][pooled_size + i],
+                             male_m);
+            EXPECT_DOUBLE_EQ(population->M[i], pooled_m);
+        }
+    }
 } // namespace
 
