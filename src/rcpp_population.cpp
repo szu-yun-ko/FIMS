@@ -42,12 +42,20 @@ void register_population(Rcpp::Module& m) {
                  total_catch_numbers)
       .field("mortality_F",
              &PopulationInterface::mortality_F)
+      .field("mortality_F_by_partition",
+             &PopulationInterface::mortality_F_by_partition)
       .field("mortality_M",
              &PopulationInterface::mortality_M)
+      .field("mortality_M_by_partition",
+             &PopulationInterface::mortality_M_by_partition)
       .field("mortality_Z",
              &PopulationInterface::mortality_Z)
+      .field("mortality_Z_by_partition",
+             &PopulationInterface::mortality_Z_by_partition)
       .field("numbers_at_age",
              &PopulationInterface::numbers_at_age)
+      .field("numbers_at_age_by_partition",
+             &PopulationInterface::numbers_at_age_by_partition)
       .field("unfished_numbers_at_age",
              &PopulationInterface::
                  unfished_numbers_at_age)
@@ -64,6 +72,8 @@ void register_population(Rcpp::Module& m) {
       .field("proportion_mature_at_age",
              &PopulationInterface::
                  proportion_mature_at_age)
+      .field("proportion_female_at_age_year",
+             &PopulationInterface::proportion_female_at_age_year)
       .field("expected_recruitment",
              &PopulationInterface::
                  expected_recruitment)
@@ -74,5 +84,7 @@ void register_population(Rcpp::Module& m) {
       .method("SetRecruitmentID", &PopulationInterface::SetRecruitmentID)
       .method("AddFleet", &PopulationInterface::AddFleet)
       .method("SetName", &PopulationInterface::SetName)
-      .method("GetName", &PopulationInterface::GetName);
+      .method("GetName", &PopulationInterface::GetName)
+      .method("SetSexStructure", &PopulationInterface::SetSexStructure)
+      .method("GetSexStructure", &PopulationInterface::GetSexStructure);
 }

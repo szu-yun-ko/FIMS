@@ -3,6 +3,38 @@
 
 namespace {
 
+TEST(SexStructure, DefaultIsSexRatioAtAge) {
+  EXPECT_EQ(fims_popdy::kDefaultSexStructure,
+            fims_popdy::SexStructure::kSexRatioAtAge);
+  EXPECT_STREQ(fims_popdy::SexStructureToString(
+                   fims_popdy::kDefaultSexStructure),
+               "sex_ratio_at_age");
+}
+
+TEST(SexStructure, RoundTripKnownNames) {
+  EXPECT_EQ(fims_popdy::SexStructureFromString("sex_ratio_at_age"),
+            fims_popdy::SexStructure::kSexRatioAtAge);
+  EXPECT_STREQ(fims_popdy::SexStructureToString(
+                   fims_popdy::SexStructure::kSexRatioAtAge),
+               "sex_ratio_at_age");
+
+  EXPECT_EQ(fims_popdy::SexStructureFromString("explicit_two_sex"),
+            fims_popdy::SexStructure::kExplicitTwoSex);
+  EXPECT_STREQ(fims_popdy::SexStructureToString(
+                   fims_popdy::SexStructure::kExplicitTwoSex),
+               "explicit_two_sex");
+}
+
+TEST(SexStructure, RejectsUnknownName) {
+  EXPECT_THROW(fims_popdy::SexStructureFromString("unknown"),
+               std::invalid_argument);
+}
+
+TEST(SexStructure, RejectsUnimplementedImplicitTwoSex) {
+  EXPECT_THROW(fims_popdy::SexStructureFromString("implicit_two_sex"),
+               std::invalid_argument);
+}
+
 TEST(PartitionDemand, DefaultIsPooled) {
   fims_popdy::PartitionDemand demand = fims_popdy::MakePooledPartitionDemand();
   EXPECT_TRUE(demand.is_pooled());

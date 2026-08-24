@@ -1151,6 +1151,87 @@ class CatchAtAgeInterface : public FisheryModelInterfaceBase {
       info->variable_map[population_interface->sum_selectivity.id_m] =
           &derived_quantities["sum_selectivity"];
 
+      // Population partitioned life-history DQs (explicit two-sex only).
+      // Gated on sex_structure, not partition_demand.
+      if (fims_popdy::SexStructureFromString(
+              population_interface->sex_structure.get()) ==
+          fims_popdy::SexStructure::kExplicitTwoSex) {
+        const size_t n_strata =
+            fims_popdy::MakeDefaultSexPartitionSpec().n_strata();
+        const size_t n_years =
+            static_cast<size_t>(population_interface->n_years.get());
+        const size_t n_ages =
+            static_cast<size_t>(population_interface->n_ages.get());
+        const size_t partitioned_mortality_size = n_strata * n_years * n_ages;
+        // Match pooled numbers_at_age: (n_years + 1) age-year planes.
+        const size_t partitioned_numbers_size =
+            n_strata * (n_years + 1) * n_ages;
+
+        derived_quantities["numbers_at_age_by_partition"] =
+            fims::Vector<Type>(partitioned_numbers_size);
+        derived_quantities_dim_info["numbers_at_age_by_partition"] =
+            fims_popdy::DimensionInfo(
+                "numbers_at_age_by_partition",
+                fims::Vector<int>{static_cast<int>(n_strata),
+                                  static_cast<int>(n_years + 1),
+                                  static_cast<int>(n_ages)},
+                fims::Vector<std::string>{"n_strata", "n_years+1", "n_ages"});
+        info->variable_map
+            [population_interface->numbers_at_age_by_partition.id_m] =
+            &derived_quantities["numbers_at_age_by_partition"];
+
+        derived_quantities["mortality_M_by_partition"] =
+            fims::Vector<Type>(partitioned_mortality_size);
+        derived_quantities_dim_info["mortality_M_by_partition"] =
+            fims_popdy::DimensionInfo(
+                "mortality_M_by_partition",
+                fims::Vector<int>{static_cast<int>(n_strata),
+                                  static_cast<int>(n_years),
+                                  static_cast<int>(n_ages)},
+                fims::Vector<std::string>{"n_strata", "n_years", "n_ages"});
+        info->variable_map
+            [population_interface->mortality_M_by_partition.id_m] =
+            &derived_quantities["mortality_M_by_partition"];
+
+        derived_quantities["mortality_F_by_partition"] =
+            fims::Vector<Type>(partitioned_mortality_size);
+        derived_quantities_dim_info["mortality_F_by_partition"] =
+            fims_popdy::DimensionInfo(
+                "mortality_F_by_partition",
+                fims::Vector<int>{static_cast<int>(n_strata),
+                                  static_cast<int>(n_years),
+                                  static_cast<int>(n_ages)},
+                fims::Vector<std::string>{"n_strata", "n_years", "n_ages"});
+        info->variable_map
+            [population_interface->mortality_F_by_partition.id_m] =
+            &derived_quantities["mortality_F_by_partition"];
+
+        derived_quantities["mortality_Z_by_partition"] =
+            fims::Vector<Type>(partitioned_mortality_size);
+        derived_quantities_dim_info["mortality_Z_by_partition"] =
+            fims_popdy::DimensionInfo(
+                "mortality_Z_by_partition",
+                fims::Vector<int>{static_cast<int>(n_strata),
+                                  static_cast<int>(n_years),
+                                  static_cast<int>(n_ages)},
+                fims::Vector<std::string>{"n_strata", "n_years", "n_ages"});
+        info->variable_map
+            [population_interface->mortality_Z_by_partition.id_m] =
+            &derived_quantities["mortality_Z_by_partition"];
+
+        derived_quantities["proportion_female_at_age_year"] =
+            fims::Vector<Type>(n_ages * n_years);
+        derived_quantities_dim_info["proportion_female_at_age_year"] =
+            fims_popdy::DimensionInfo(
+                "proportion_female_at_age_year",
+                fims::Vector<int>{static_cast<int>(n_ages),
+                                  static_cast<int>(n_years)},
+                fims::Vector<std::string>{"n_ages", "n_years"});
+        info->variable_map
+            [population_interface->proportion_female_at_age_year.id_m] =
+            &derived_quantities["proportion_female_at_age_year"];
+      }
+
       // replace elements in the variable map
 
       for (fleet_ids_iterator fit = population_interface->fleet_ids->begin();
