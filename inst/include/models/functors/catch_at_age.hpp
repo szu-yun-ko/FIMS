@@ -494,8 +494,9 @@ class CatchAtAge : public FisheryModelBase<Type> {
     dq_["mortality_Z"][i_age_year] =
         population->M[i_age_year] + dq_["mortality_F"][i_age_year];
 
-    // Explicit two-sex: fill F/Z by partition. Selectivity is currently
-    // shared, so F is duplicated across sexes; Z uses sex-specific M.
+    // Explicit two-sex: fill F/Z by partition. Use stratum-specific
+    // selectivity when provided; otherwise fall back to shared selectivity
+    // (F duplicated across sexes). Z_sex = M_sex + F_sex.
     if (population->sex_structure == fims_popdy::SexStructure::kExplicitTwoSex) {
       auto m_it = dq_.find("mortality_M_by_partition");
       auto f_it = dq_.find("mortality_F_by_partition");
@@ -514,13 +515,20 @@ class CatchAtAge : public FisheryModelBase<Type> {
             "mortality_F_by_partition size.");
       }
       const size_t n_strata = f_it->second.size() / pooled_age_year_size;
-      const Type f_pooled = dq_["mortality_F"][i_age_year];
       for (size_t stratum = 0; stratum < n_strata; stratum++) {
         const size_t i_stratum_age_year =
             stratum * pooled_age_year_size + i_age_year;
-        f_it->second[i_stratum_age_year] = f_pooled;
+        Type f_sex = static_cast<Type>(0.0);
+        for (size_t fleet_ = 0; fleet_ < population->n_fleets; fleet_++) {
+          Type s = population->fleets[fleet_]
+                       ->GetSelectivityForStratum(stratum)
+                       ->evaluate(population->ages[age], year);
+          f_sex += population->fleets[fleet_]->Fmort[year] *
+                   population->f_multiplier[year] * s;
+        }
+        f_it->second[i_stratum_age_year] = f_sex;
         z_it->second[i_stratum_age_year] =
-            m_it->second[i_stratum_age_year] + f_pooled;
+            m_it->second[i_stratum_age_year] + f_sex;
       }
     }
   }

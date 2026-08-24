@@ -93,6 +93,61 @@ TEST_F(CAAPrepareTestFixture,
   }
 }
 
+TEST_F(CAAPrepareTestFixture,
+       ExplicitTwoSexSexSpecificSelectivityYieldsSexSpecificF) {
+  catch_at_age_model->populations[0]->sex_structure =
+      fims_popdy::SexStructure::kExplicitTwoSex;
+  this->InitializeCAA();
+
+  auto female_sel = std::make_shared<fims_popdy::LogisticSelectivity<double>>();
+  female_sel->inflection_point.resize(1);
+  female_sel->inflection_point[0] = 5.0;
+  female_sel->slope.resize(1);
+  female_sel->slope[0] = 0.5;
+
+  auto male_sel = std::make_shared<fims_popdy::LogisticSelectivity<double>>();
+  male_sel->inflection_point.resize(1);
+  male_sel->inflection_point[0] = 10.0;
+  male_sel->slope.resize(1);
+  male_sel->slope[0] = 0.5;
+
+  for (size_t fleet_ = 0; fleet_ < population->n_fleets; fleet_++) {
+    population->fleets[fleet_]->selectivity = female_sel;
+    population->fleets[fleet_]->selectivity_by_partition = {female_sel,
+                                                            male_sel};
+  }
+
+  catch_at_age_model->Prepare();
+  size_t pop_id = population->GetId();
+  auto& dq = catch_at_age_model->GetPopulationDerivedQuantities(pop_id);
+  const size_t pooled_size =
+      static_cast<size_t>(population->n_years * population->n_ages);
+
+  bool found_sex_difference = false;
+  for (int year = 0; year < population->n_years; year++) {
+    for (int age = 0; age < population->n_ages; age++) {
+      int i_age_year = year * population->n_ages + age;
+      catch_at_age_model->CalculateMortality(population, i_age_year, year,
+                                             age);
+
+      const size_t i_female = i_age_year;
+      const size_t i_male = pooled_size + i_age_year;
+      const double f_female = dq["mortality_F_by_partition"][i_female];
+      const double f_male = dq["mortality_F_by_partition"][i_male];
+
+      EXPECT_DOUBLE_EQ(dq["mortality_F"][i_age_year], f_female);
+      EXPECT_DOUBLE_EQ(dq["mortality_Z_by_partition"][i_female],
+                       dq["mortality_M_by_partition"][i_female] + f_female);
+      EXPECT_DOUBLE_EQ(dq["mortality_Z_by_partition"][i_male],
+                       dq["mortality_M_by_partition"][i_male] + f_male);
+      if (std::abs(f_female - f_male) > 1e-8) {
+        found_sex_difference = true;
+      }
+    }
+  }
+  EXPECT_TRUE(found_sex_difference);
+}
+
 // CatchAtAge_CalculateInitialNumbersAA
 // IO correctness
 TEST_F(CAAEvaluateTestFixture,
