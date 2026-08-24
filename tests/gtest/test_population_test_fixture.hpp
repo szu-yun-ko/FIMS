@@ -118,6 +118,24 @@ class CAAInitializeTestFixture : public testing::Test {
           this->catch_at_age_model->populations[p]->n_years *
           this->catch_at_age_model->populations[p]->n_ages);
 
+      // Population partitioned life-history DQs (explicit two-sex only).
+      if (this->catch_at_age_model->populations[p]->sex_structure ==
+          fims_popdy::SexStructure::kExplicitTwoSex) {
+        const size_t n_strata =
+            fims_popdy::MakeDefaultSexPartitionSpec().n_strata();
+        const size_t n_years =
+            this->catch_at_age_model->populations[p]->n_years;
+        const size_t n_ages = this->catch_at_age_model->populations[p]->n_ages;
+        derived_quantities["numbers_at_age_by_partition"] = fims::Vector<double>(
+            n_strata * (n_years + 1) * n_ages);
+        derived_quantities["mortality_M_by_partition"] =
+            fims::Vector<double>(n_strata * n_years * n_ages);
+        derived_quantities["mortality_F_by_partition"] =
+            fims::Vector<double>(n_strata * n_years * n_ages);
+        derived_quantities["mortality_Z_by_partition"] =
+            fims::Vector<double>(n_strata * n_years * n_ages);
+      }
+
       this->catch_at_age_model->populations[p]->proportion_female.resize(
           this->catch_at_age_model->populations[p]->n_ages);
       for (size_t a = 0; a < this->catch_at_age_model->populations[p]->n_ages;
@@ -482,6 +500,24 @@ class CAAEvaluateTestFixture : public testing::Test {
           this->catch_at_age_model->populations[p]->n_years *
           this->catch_at_age_model->populations[p]->n_ages);
 
+      // Population partitioned life-history DQs (explicit two-sex only).
+      if (this->catch_at_age_model->populations[p]->sex_structure ==
+          fims_popdy::SexStructure::kExplicitTwoSex) {
+        const size_t n_strata =
+            fims_popdy::MakeDefaultSexPartitionSpec().n_strata();
+        const size_t n_years =
+            this->catch_at_age_model->populations[p]->n_years;
+        const size_t n_ages = this->catch_at_age_model->populations[p]->n_ages;
+        derived_quantities["numbers_at_age_by_partition"] = fims::Vector<double>(
+            n_strata * (n_years + 1) * n_ages);
+        derived_quantities["mortality_M_by_partition"] =
+            fims::Vector<double>(n_strata * n_years * n_ages);
+        derived_quantities["mortality_F_by_partition"] =
+            fims::Vector<double>(n_strata * n_years * n_ages);
+        derived_quantities["mortality_Z_by_partition"] =
+            fims::Vector<double>(n_strata * n_years * n_ages);
+      }
+
       this->catch_at_age_model->populations[p]->proportion_female.resize(
           this->catch_at_age_model->populations[p]->n_ages);
       for (size_t a = 0; a < this->catch_at_age_model->populations[p]->n_ages;
@@ -781,6 +817,24 @@ class CAAPrepareTestFixture : public testing::Test {
       derived_quantities["sum_selectivity"] = fims::Vector<double>(
           this->catch_at_age_model->populations[p]->n_years *
           this->catch_at_age_model->populations[p]->n_ages);
+
+      // Population partitioned life-history DQs (explicit two-sex only).
+      if (this->catch_at_age_model->populations[p]->sex_structure ==
+          fims_popdy::SexStructure::kExplicitTwoSex) {
+        const size_t n_strata =
+            fims_popdy::MakeDefaultSexPartitionSpec().n_strata();
+        const size_t n_years =
+            this->catch_at_age_model->populations[p]->n_years;
+        const size_t n_ages = this->catch_at_age_model->populations[p]->n_ages;
+        derived_quantities["numbers_at_age_by_partition"] = fims::Vector<double>(
+            n_strata * (n_years + 1) * n_ages);
+        derived_quantities["mortality_M_by_partition"] =
+            fims::Vector<double>(n_strata * n_years * n_ages);
+        derived_quantities["mortality_F_by_partition"] =
+            fims::Vector<double>(n_strata * n_years * n_ages);
+        derived_quantities["mortality_Z_by_partition"] =
+            fims::Vector<double>(n_strata * n_years * n_ages);
+      }
 
       this->catch_at_age_model->populations[p]->proportion_female.resize(
           this->catch_at_age_model->populations[p]->n_ages);

@@ -45,6 +45,31 @@ namespace
         EXPECT_EQ(catch_at_age_model->populations[0]->M.size(), n_years * n_ages);
         EXPECT_EQ(dq["expected_recruitment"].size(), n_years + 1);
         EXPECT_EQ(dq["sum_selectivity"].size(), n_years * n_ages);
+        // Model 1 (default sex_structure) does not allocate partitioned
+        // life-history DQs.
+        EXPECT_EQ(dq.find("numbers_at_age_by_partition"), dq.end());
+        EXPECT_EQ(dq.find("mortality_M_by_partition"), dq.end());
+        EXPECT_EQ(dq.find("mortality_F_by_partition"), dq.end());
+        EXPECT_EQ(dq.find("mortality_Z_by_partition"), dq.end());
+    }
+
+    TEST_F(CAAInitializeTestFixture,
+           ExplicitTwoSexRegistersPopulationPartitionedLifeHistoryDQs)
+    {
+        population->sex_structure = fims_popdy::SexStructure::kExplicitTwoSex;
+        this->InitializeCAA();
+        auto &dq = catch_at_age_model->GetPopulationDerivedQuantities(0);
+        const size_t n_strata =
+            fims_popdy::MakeDefaultSexPartitionSpec().n_strata();
+
+        EXPECT_EQ(dq["numbers_at_age_by_partition"].size(),
+                  n_strata * (n_years + 1) * n_ages);
+        EXPECT_EQ(dq["mortality_M_by_partition"].size(),
+                  n_strata * n_years * n_ages);
+        EXPECT_EQ(dq["mortality_F_by_partition"].size(),
+                  n_strata * n_years * n_ages);
+        EXPECT_EQ(dq["mortality_Z_by_partition"].size(),
+                  n_strata * n_years * n_ages);
     }
 
     TEST_F(CAAPrepareTestFixture, HandlesCorrectInput_Population_InitializeCAA_Prepare)

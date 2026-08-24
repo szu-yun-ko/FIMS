@@ -42,12 +42,20 @@ void register_population(Rcpp::Module& m) {
                  total_catch_numbers)
       .field("mortality_F",
              &PopulationInterface::mortality_F)
+      .field("mortality_F_by_partition",
+             &PopulationInterface::mortality_F_by_partition)
       .field("mortality_M",
              &PopulationInterface::mortality_M)
+      .field("mortality_M_by_partition",
+             &PopulationInterface::mortality_M_by_partition)
       .field("mortality_Z",
              &PopulationInterface::mortality_Z)
+      .field("mortality_Z_by_partition",
+             &PopulationInterface::mortality_Z_by_partition)
       .field("numbers_at_age",
              &PopulationInterface::numbers_at_age)
+      .field("numbers_at_age_by_partition",
+             &PopulationInterface::numbers_at_age_by_partition)
       .field("unfished_numbers_at_age",
              &PopulationInterface::
                  unfished_numbers_at_age)

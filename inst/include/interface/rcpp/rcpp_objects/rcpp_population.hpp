@@ -178,21 +178,37 @@ class PopulationInterface : public PopulationInterfaceBase {
    * @brief Total annual fishing mortality a population is subject to.
    */
   VariableVector mortality_F;
+  /**
+   * @brief Fishing mortality by partition stratum (explicit two-sex only).
+   */
+  VariableVector mortality_F_by_partition;
 
   /**
    * @brief Total annual natural mortality a population is subject to.
    */
   VariableVector mortality_M;
+  /**
+   * @brief Natural mortality by partition stratum (explicit two-sex only).
+   */
+  VariableVector mortality_M_by_partition;
 
   /**
    * @brief Total annual mortality a population is subject to.
    */
   VariableVector mortality_Z;
+  /**
+   * @brief Total mortality by partition stratum (explicit two-sex only).
+   */
+  VariableVector mortality_Z_by_partition;
 
   /**
    * @brief Current population composition in numbers at age.
    */
   VariableVector numbers_at_age;
+  /**
+   * @brief Numbers at age by partition stratum (explicit two-sex only).
+   */
+  VariableVector numbers_at_age_by_partition;
 
   /**
    * @brief Theoretical population composition in numbers at age if no fishing
@@ -274,9 +290,13 @@ class PopulationInterface : public PopulationInterfaceBase {
         total_catch_weight(other.total_catch_weight),
         total_catch_numbers(other.total_catch_numbers),
         mortality_F(other.mortality_F),
+        mortality_F_by_partition(other.mortality_F_by_partition),
         mortality_M(other.mortality_M),
+        mortality_M_by_partition(other.mortality_M_by_partition),
         mortality_Z(other.mortality_Z),
+        mortality_Z_by_partition(other.mortality_Z_by_partition),
         numbers_at_age(other.numbers_at_age),
+        numbers_at_age_by_partition(other.numbers_at_age_by_partition),
         unfished_numbers_at_age(other.unfished_numbers_at_age),
         biomass(other.biomass),
         spawning_biomass(other.spawning_biomass),
