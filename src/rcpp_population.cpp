@@ -72,6 +72,8 @@ void register_population(Rcpp::Module& m) {
       .field("proportion_mature_at_age",
              &PopulationInterface::
                  proportion_mature_at_age)
+      .field("proportion_female_at_age_year",
+             &PopulationInterface::proportion_female_at_age_year)
       .field("expected_recruitment",
              &PopulationInterface::
                  expected_recruitment)

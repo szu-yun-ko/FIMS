@@ -134,6 +134,8 @@ class CAAInitializeTestFixture : public testing::Test {
             fims::Vector<double>(n_strata * n_years * n_ages);
         derived_quantities["mortality_Z_by_partition"] =
             fims::Vector<double>(n_strata * n_years * n_ages);
+        derived_quantities["proportion_female_at_age_year"] =
+            fims::Vector<double>(n_ages * n_years);
       }
 
       this->catch_at_age_model->populations[p]->proportion_female.resize(
@@ -516,6 +518,8 @@ class CAAEvaluateTestFixture : public testing::Test {
             fims::Vector<double>(n_strata * n_years * n_ages);
         derived_quantities["mortality_Z_by_partition"] =
             fims::Vector<double>(n_strata * n_years * n_ages);
+        derived_quantities["proportion_female_at_age_year"] =
+            fims::Vector<double>(n_ages * n_years);
       }
 
       this->catch_at_age_model->populations[p]->proportion_female.resize(
@@ -834,6 +838,8 @@ class CAAPrepareTestFixture : public testing::Test {
             fims::Vector<double>(n_strata * n_years * n_ages);
         derived_quantities["mortality_Z_by_partition"] =
             fims::Vector<double>(n_strata * n_years * n_ages);
+        derived_quantities["proportion_female_at_age_year"] =
+            fims::Vector<double>(n_ages * n_years);
       }
 
       this->catch_at_age_model->populations[p]->proportion_female.resize(

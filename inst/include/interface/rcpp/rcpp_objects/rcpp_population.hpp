@@ -240,6 +240,13 @@ class PopulationInterface : public PopulationInterfaceBase {
    */
   VariableVector proportion_mature_at_age;
   /**
+   * @brief Female proportion at age and year (explicit two-sex only).
+   *
+   * @details Size n_ages x n_years. Model 1 keeps scalar / age-only
+   * proportion_female; this DQ is allocated only for explicit_two_sex.
+   */
+  VariableVector proportion_female_at_age_year;
+  /**
    * @brief Model-expected recruitment each year based on the stock--recruit
    * relationship.
    */
@@ -303,6 +310,7 @@ class PopulationInterface : public PopulationInterfaceBase {
         unfished_biomass(other.unfished_biomass),
         unfished_spawning_biomass(other.unfished_spawning_biomass),
         proportion_mature_at_age(other.proportion_mature_at_age),
+        proportion_female_at_age_year(other.proportion_female_at_age_year),
         expected_recruitment(other.expected_recruitment),
         sum_selectivity(other.sum_selectivity) {}
 

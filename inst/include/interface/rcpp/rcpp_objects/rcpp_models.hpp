@@ -1218,6 +1218,18 @@ class CatchAtAgeInterface : public FisheryModelInterfaceBase {
         info->variable_map
             [population_interface->mortality_Z_by_partition.id_m] =
             &derived_quantities["mortality_Z_by_partition"];
+
+        derived_quantities["proportion_female_at_age_year"] =
+            fims::Vector<Type>(n_ages * n_years);
+        derived_quantities_dim_info["proportion_female_at_age_year"] =
+            fims_popdy::DimensionInfo(
+                "proportion_female_at_age_year",
+                fims::Vector<int>{static_cast<int>(n_ages),
+                                  static_cast<int>(n_years)},
+                fims::Vector<std::string>{"n_ages", "n_years"});
+        info->variable_map
+            [population_interface->proportion_female_at_age_year.id_m] =
+            &derived_quantities["proportion_female_at_age_year"];
       }
 
       // replace elements in the variable map

@@ -51,6 +51,7 @@ namespace
         EXPECT_EQ(dq.find("mortality_M_by_partition"), dq.end());
         EXPECT_EQ(dq.find("mortality_F_by_partition"), dq.end());
         EXPECT_EQ(dq.find("mortality_Z_by_partition"), dq.end());
+        EXPECT_EQ(dq.find("proportion_female_at_age_year"), dq.end());
     }
 
     TEST_F(CAAInitializeTestFixture,
@@ -70,6 +71,8 @@ namespace
                   n_strata * n_years * n_ages);
         EXPECT_EQ(dq["mortality_Z_by_partition"].size(),
                   n_strata * n_years * n_ages);
+        EXPECT_EQ(dq["proportion_female_at_age_year"].size(),
+                  n_ages * n_years);
     }
 
     TEST_F(CAAPrepareTestFixture, HandlesCorrectInput_Population_InitializeCAA_Prepare)
