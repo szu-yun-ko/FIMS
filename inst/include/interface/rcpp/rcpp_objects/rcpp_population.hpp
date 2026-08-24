@@ -153,6 +153,13 @@ class PopulationInterface : public PopulationInterfaceBase {
    * @brief The name for the population.
    */
   SharedString name = fims::to_string("NA");
+  /**
+   * @brief Sex-structure model for population dynamics.
+   *
+   * @details Allowed values: "sex_ratio_at_age" (default) or "explicit_two_sex".
+   * Orthogonal to partition demand, which only selects output planes.
+   */
+  SharedString sex_structure = fims::to_string("sex_ratio_at_age");
 
   // Population based derived quantities
   /**
@@ -263,6 +270,7 @@ class PopulationInterface : public PopulationInterfaceBase {
         proportion_female(other.proportion_female),
         ages(other.ages),
         name(other.name),
+        sex_structure(other.sex_structure),
         total_catch_weight(other.total_catch_weight),
         total_catch_numbers(other.total_catch_numbers),
         mortality_F(other.mortality_F),
@@ -300,6 +308,22 @@ class PopulationInterface : public PopulationInterfaceBase {
    * @return The name.
    */
   std::string GetName() const { return this->name.get(); }
+
+  /**
+   * @brief Sets the sex-structure model for the population.
+   * @param name One of "sex_ratio_at_age" or "explicit_two_sex".
+   */
+  void SetSexStructure(const std::string &name) {
+    this->sex_structure.set(
+        fims_popdy::SexStructureToString(
+            fims_popdy::SexStructureFromString(name)));
+  }
+
+  /**
+   * @brief Gets the sex-structure model for the population.
+   * @return The sex-structure name.
+   */
+  std::string GetSexStructure() const { return this->sex_structure.get(); }
 
   /**
    * @brief Sets the unique ID for the Maturity object.
@@ -565,6 +589,9 @@ class PopulationInterface : public PopulationInterfaceBase {
     }
     info->variable_map[this->proportion_female.id_m] =
         &(population)->proportion_female;
+
+    population->sex_structure =
+        fims_popdy::SexStructureFromString(this->sex_structure.get());
 
     for (size_t i = 0; i < ages.size(); i++) {
       population->ages[i] = this->ages[i];
