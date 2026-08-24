@@ -58,5 +58,7 @@ void register_population(Rcpp::Module& m) {
       .method("SetName", &PopulationInterface::SetName)
       .method("GetName", &PopulationInterface::GetName)
       .method("SetPartitionDemand", &PopulationInterface::SetPartitionDemand)
-      .method("GetPartitionDemand", &PopulationInterface::GetPartitionDemand);
+      .method("GetPartitionDemand", &PopulationInterface::GetPartitionDemand)
+      .method("SetSexStructure", &PopulationInterface::SetSexStructure)
+      .method("GetSexStructure", &PopulationInterface::GetSexStructure);
 }

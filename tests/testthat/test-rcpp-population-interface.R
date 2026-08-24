@@ -115,6 +115,34 @@ test_that("rcpp population SetPartitionDemand round-trips named lists", {
   clear()
 })
 
+test_that("sex_structure defaults and round-trips through Set/GetSexStructure", {
+  population <- methods::new(Population)
+
+  #' @description Test that sex_structure defaults to sex_ratio_at_age.
+  expect_equal(
+    object = population$GetSexStructure(),
+    expected = "sex_ratio_at_age"
+  )
+
+  population$SetSexStructure("explicit_two_sex")
+
+  #' @description Test that SetSexStructure updates GetSexStructure.
+  expect_equal(
+    object = population$GetSexStructure(),
+    expected = "explicit_two_sex"
+  )
+
+  population$SetSexStructure("sex_ratio_at_age")
+
+  #' @description Test that sex_ratio_at_age round-trips.
+  expect_equal(
+    object = population$GetSexStructure(),
+    expected = "sex_ratio_at_age"
+  )
+
+  clear()
+})
+
 ## Edge handling ----
 # No Edge handling for now.
 
@@ -132,6 +160,24 @@ test_that("rcpp population SetPartitionDemand rejects invalid lists", {
   expect_error(
     population$SetPartitionDemand(list(sex = "female", sex = "male")),
     regexp = "duplicate axis"
+  )
+
+  clear()
+})
+
+test_that("SetSexStructure rejects unknown and unimplemented values", {
+  population <- methods::new(Population)
+
+  #' @description Test that unknown sex_structure names error.
+  expect_error(
+    object = population$SetSexStructure("unknown"),
+    regexp = "unknown sex_structure"
+  )
+
+  #' @description Test that implicit_two_sex is rejected until implemented.
+  expect_error(
+    object = population$SetSexStructure("implicit_two_sex"),
+    regexp = "unknown sex_structure"
   )
 
   clear()
