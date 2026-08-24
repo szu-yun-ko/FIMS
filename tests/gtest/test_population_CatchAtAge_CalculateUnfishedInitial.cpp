@@ -63,6 +63,46 @@ namespace
         }
     }
 
+    TEST_F(CAAPrepareTestFixture,
+           ExplicitTwoSexCalculateMortalityFillsFAndZByPartition) {
+        catch_at_age_model->populations[0]->sex_structure =
+            fims_popdy::SexStructure::kExplicitTwoSex;
+        this->InitializeCAA();
+        catch_at_age_model->Prepare();
+        size_t pop_id = population->GetId();
+        auto &dq = catch_at_age_model->GetPopulationDerivedQuantities(pop_id);
+        const size_t n_strata =
+            fims_popdy::MakeDefaultSexPartitionSpec().n_strata();
+        const size_t pooled_size =
+            static_cast<size_t>(population->n_years * population->n_ages);
+
+        for (int year = 0; year < population->n_years; year++) {
+            for (int age = 0; age < population->n_ages; age++) {
+                int i_age_year = year * population->n_ages + age;
+                catch_at_age_model->CalculateMortality(population, i_age_year,
+                                                       year, age);
+            }
+        }
+
+        for (int year = 0; year < population->n_years; year++) {
+            for (int age = 0; age < population->n_ages; age++) {
+                int i_age_year = year * population->n_ages + age;
+                const double f_pooled = dq["mortality_F"][i_age_year];
+                for (size_t stratum = 0; stratum < n_strata; stratum++) {
+                    const size_t i_stratum_age_year =
+                        stratum * pooled_size + i_age_year;
+                    EXPECT_DOUBLE_EQ(
+                        dq["mortality_F_by_partition"][i_stratum_age_year],
+                        f_pooled);
+                    EXPECT_DOUBLE_EQ(
+                        dq["mortality_Z_by_partition"][i_stratum_age_year],
+                        dq["mortality_M_by_partition"][i_stratum_age_year] +
+                            f_pooled);
+                }
+            }
+        }
+    }
+
     // CatchAtAge_CalculateInitialNumbersAA
     // IO correctness
     TEST_F(CAAEvaluateTestFixture, HandlesCorrectInput_CatchAtAge_CalculateInitialNumbersAA)

@@ -473,6 +473,36 @@ class CatchAtAge : public FisheryModelBase<Type> {
 
     dq_["mortality_Z"][i_age_year] =
         population->M[i_age_year] + dq_["mortality_F"][i_age_year];
+
+    // Explicit two-sex: fill F/Z by partition. Selectivity is currently
+    // shared, so F is duplicated across sexes; Z uses sex-specific M.
+    if (population->sex_structure == fims_popdy::SexStructure::kExplicitTwoSex) {
+      auto m_it = dq_.find("mortality_M_by_partition");
+      auto f_it = dq_.find("mortality_F_by_partition");
+      auto z_it = dq_.find("mortality_Z_by_partition");
+      if (m_it == dq_.end() || f_it == dq_.end() || z_it == dq_.end()) {
+        throw std::invalid_argument(
+            "CatchAtAge::CalculateMortality explicit_two_sex missing "
+            "partitioned mortality derived quantities.");
+      }
+      const size_t pooled_age_year_size =
+          population->n_years * population->n_ages;
+      if (f_it->second.size() == 0 ||
+          f_it->second.size() % pooled_age_year_size != 0) {
+        throw std::invalid_argument(
+            "CatchAtAge::CalculateMortality explicit_two_sex found invalid "
+            "mortality_F_by_partition size.");
+      }
+      const size_t n_strata = f_it->second.size() / pooled_age_year_size;
+      const Type f_pooled = dq_["mortality_F"][i_age_year];
+      for (size_t stratum = 0; stratum < n_strata; stratum++) {
+        const size_t i_stratum_age_year =
+            stratum * pooled_age_year_size + i_age_year;
+        f_it->second[i_stratum_age_year] = f_pooled;
+        z_it->second[i_stratum_age_year] =
+            m_it->second[i_stratum_age_year] + f_pooled;
+      }
+    }
   }
 
   /**
