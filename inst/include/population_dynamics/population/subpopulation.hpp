@@ -417,6 +417,87 @@ inline std::vector<size_t> RequestedStrata(const PartitionSpec &spec,
 }
 
 /**
+ * @brief Validate PartitionDemand axis and level names against a PartitionSpec.
+ *
+ * @details No-op for pooled (empty) demand. Otherwise checks that every
+ * requested axis exists on the spec and every level label is known (or "*"),
+ * and that each axis appears at most once in the demand. Duplicate axis
+ * entries (e.g. list(sex = "female", sex = "male")) are rejected; use a
+ * single entry with a level vector instead, e.g. list(sex = c("female",
+ * "male")). Throws std::invalid_argument with messages that list known names
+ * to help users fix R-side configuration.
+ */
+inline void ValidatePartitionDemand(const PartitionSpec &spec,
+                                    const PartitionDemand &demand) {
+  if (demand.is_pooled()) {
+    return;
+  }
+  if (spec.axes.empty()) {
+    throw std::invalid_argument(
+        "Invalid partition_demand: partition spec has no axes");
+  }
+
+  auto join_names = [](const std::vector<std::string> &names) {
+    std::string out;
+    for (size_t i = 0; i < names.size(); ++i) {
+      if (i > 0) {
+        out += ", ";
+      }
+      out += names[i];
+    }
+    return out;
+  };
+
+  std::vector<std::string> known_axes;
+  known_axes.reserve(spec.axes.size());
+  for (const Axis &axis : spec.axes) {
+    known_axes.push_back(axis.name);
+  }
+
+  std::vector<std::string> seen_axes;
+  seen_axes.reserve(demand.selections.size());
+  for (const AxisLevelSelection &selection : demand.selections) {
+    for (const std::string &seen : seen_axes) {
+      if (seen == selection.axis_name) {
+        throw std::invalid_argument(
+            "Invalid partition_demand: duplicate axis \"" +
+            selection.axis_name +
+            "\". Provide each axis once with a level vector, e.g. list(sex = "
+            "c(\"female\", \"male\")).");
+      }
+    }
+    seen_axes.push_back(selection.axis_name);
+
+    const int axis_index = detail::find_axis_index(spec, selection.axis_name);
+    if (axis_index < 0) {
+      throw std::invalid_argument(
+          "Invalid partition_demand: unknown axis \"" + selection.axis_name +
+          "\"; known axes: " + join_names(known_axes));
+    }
+    if (selection.level_names.empty()) {
+      throw std::invalid_argument(
+          "Invalid partition_demand: level vector for axis \"" +
+          selection.axis_name + "\" must be non-empty");
+    }
+    const Axis &axis = spec.axes[static_cast<size_t>(axis_index)];
+    for (const std::string &level_name : selection.level_names) {
+      if (level_name == "*") {
+        continue;
+      }
+      if (detail::find_level_index(axis, level_name) < 0) {
+        throw std::invalid_argument(
+            "Invalid partition_demand: unknown level \"" + level_name +
+            "\" for axis \"" + axis.name +
+            "\"; known levels: " + join_names(axis.levels));
+      }
+    }
+    // Reuse MakeGroupSelectorFromDemand for remaining rules (e.g. partial
+    // multi-level subsets not yet supported).
+  }
+  MakeGroupSelectorFromDemand(spec, demand);
+}
+
+/**
  * @brief Sex split policy: build per-stratum weights from proportion_female.
  *
  * @details Companion to MakeDefaultSexPartitionSpec(). Only valid when spec
