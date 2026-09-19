@@ -391,6 +391,36 @@ TEST(MakeSexStratumEntryWeights, RejectsNonSexPartition) {
                std::invalid_argument);
 }
 
+TEST(ResolveStratumEntryWeights, EmptyUserFallsBackToSexDefault) {
+  fims_popdy::PartitionSpec spec = fims_popdy::MakeDefaultSexPartitionSpec();
+  const std::vector<double> empty;
+  const double p_female = 0.35;
+  const std::vector<double> weights =
+      fims_popdy::ResolveStratumEntryWeights(spec, empty, p_female);
+
+  ASSERT_EQ(weights.size(), 2);
+  EXPECT_DOUBLE_EQ(weights[0], p_female);
+  EXPECT_DOUBLE_EQ(weights[1], 1.0 - p_female);
+}
+
+TEST(ResolveStratumEntryWeights, NonEmptyUserOverridesSexDefault) {
+  fims_popdy::PartitionSpec spec = fims_popdy::MakeDefaultSexPartitionSpec();
+  const std::vector<double> user = {0.2, 0.8};
+  const std::vector<double> weights =
+      fims_popdy::ResolveStratumEntryWeights(spec, user, 0.5);
+
+  ASSERT_EQ(weights.size(), 2);
+  EXPECT_DOUBLE_EQ(weights[0], 0.2);
+  EXPECT_DOUBLE_EQ(weights[1], 0.8);
+}
+
+TEST(ResolveStratumEntryWeights, RejectsInvalidUserWeights) {
+  fims_popdy::PartitionSpec spec = fims_popdy::MakeDefaultSexPartitionSpec();
+  const std::vector<double> bad_sum = {0.1, 0.1};
+  EXPECT_THROW(fims_popdy::ResolveStratumEntryWeights(spec, bad_sum, 0.5),
+               std::invalid_argument);
+}
+
 TEST(IndexLayout, FoldedIndicesMatchYearAgeAndStratum) {
   fims_popdy::IndexLayout layout;
   layout.n_strata = 2;

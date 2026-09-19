@@ -173,6 +173,24 @@ class PopulationInterface : public PopulationInterfaceBase {
    * Orthogonal to partition demand, which only selects output planes.
    */
   SharedString sex_structure = fims::to_string("sex_ratio_at_age");
+  /**
+   * @brief Per-stratum init apportionment weights (explicit mode).
+   *
+   * @details Empty means sex default from proportion_female. Shared so the
+   * R-facing instance and live_objects clone stay in sync. Configure with
+   * SetInitApportionment() / GetInitApportionment().
+   */
+  std::shared_ptr<std::vector<double>> init_apportionment =
+      std::make_shared<std::vector<double>>();
+  /**
+   * @brief Per-stratum recruit apportionment weights (explicit mode).
+   *
+   * @details Empty means sex default from proportion_female. Shared so the
+   * R-facing instance and live_objects clone stay in sync. Configure with
+   * SetRecruitApportionment() / GetRecruitApportionment().
+   */
+  std::shared_ptr<std::vector<double>> recruit_apportionment =
+      std::make_shared<std::vector<double>>();
 
   // Population based derived quantities
   /**
@@ -308,6 +326,8 @@ class PopulationInterface : public PopulationInterfaceBase {
         ages(other.ages),
         name(other.name),
         sex_structure(other.sex_structure),
+        init_apportionment(other.init_apportionment),
+        recruit_apportionment(other.recruit_apportionment),
         total_catch_weight(other.total_catch_weight),
         total_catch_numbers(other.total_catch_numbers),
         mortality_F(other.mortality_F),
@@ -449,6 +469,47 @@ class PopulationInterface : public PopulationInterfaceBase {
    * @return The sex-structure name.
    */
   std::string GetSexStructure() const { return this->sex_structure.get(); }
+
+  /**
+   * @brief Set init apportionment weights from an R numeric vector.
+   *
+   * @details NULL or length-0 clears to empty (sex default at model build).
+   * Non-empty vectors are validated against the default sex partition
+   * (length 2, non-negative, sum to 1). Multi-axis validation is deferred
+   * to model Initialize when partition_spec is known.
+   *
+   * @param weights Numeric vector of length n_strata, or NULL/empty.
+   */
+  void SetInitApportionment(Rcpp::Nullable<Rcpp::NumericVector> weights) {
+    this->SetApportionmentVector(this->init_apportionment, weights,
+                                 "SetInitApportionment");
+  }
+
+  /**
+   * @brief Get init apportionment weights (empty numeric if unset).
+   */
+  Rcpp::NumericVector GetInitApportionment() const {
+    return Rcpp::wrap(*this->init_apportionment);
+  }
+
+  /**
+   * @brief Set recruit apportionment weights from an R numeric vector.
+   *
+   * @details Same rules as SetInitApportionment().
+   *
+   * @param weights Numeric vector of length n_strata, or NULL/empty.
+   */
+  void SetRecruitApportionment(Rcpp::Nullable<Rcpp::NumericVector> weights) {
+    this->SetApportionmentVector(this->recruit_apportionment, weights,
+                                 "SetRecruitApportionment");
+  }
+
+  /**
+   * @brief Get recruit apportionment weights (empty numeric if unset).
+   */
+  Rcpp::NumericVector GetRecruitApportionment() const {
+    return Rcpp::wrap(*this->recruit_apportionment);
+  }
 
   /**
    * @brief Sets the unique ID for the Maturity object.
@@ -722,6 +783,12 @@ class PopulationInterface : public PopulationInterfaceBase {
     population->sex_structure =
         fims_popdy::SexStructureFromString(this->sex_structure.get());
 
+    population->init_apportionment.assign(this->init_apportionment->begin(),
+                                          this->init_apportionment->end());
+    population->recruit_apportionment.assign(
+        this->recruit_apportionment->begin(),
+        this->recruit_apportionment->end());
+
     for (size_t i = 0; i < ages.size(); i++) {
       population->ages[i] = this->ages[i];
     }
@@ -744,6 +811,36 @@ class PopulationInterface : public PopulationInterfaceBase {
   }
 
 #endif
+
+ private:
+  /**
+   * @brief Validate and assign a stratum entry-weight vector.
+   *
+   * @details NULL or empty clears @p target (C++ ResolveStratumEntryWeights
+   * sex default). Non-empty input is validated against the default sex
+   * partition via fims_popdy::ValidateStratumEntryWeights.
+   */
+  void SetApportionmentVector(
+      std::shared_ptr<std::vector<double> > target,
+      Rcpp::Nullable<Rcpp::NumericVector> values, const std::string& name) {
+    if (values.isNull()) {
+      target->clear();
+      return;
+    }
+    Rcpp::NumericVector vec(values.get());
+    if (vec.size() == 0) {
+      target->clear();
+      return;
+    }
+    std::vector<double> weights(vec.begin(), vec.end());
+    try {
+      fims_popdy::ValidateStratumEntryWeights(
+          fims_popdy::MakeDefaultSexPartitionSpec(), weights);
+    } catch (const std::invalid_argument& e) {
+      Rcpp::stop("%s: %s", name.c_str(), e.what());
+    }
+    *target = std::move(weights);
+  }
 };
 
 #endif

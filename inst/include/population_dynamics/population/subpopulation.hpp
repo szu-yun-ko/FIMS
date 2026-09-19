@@ -642,6 +642,28 @@ std::vector<Type> MakeSexStratumEntryWeights(const PartitionSpec &spec,
 }
 
 /**
+ * @brief Resolve entry weights: user vector if non-empty, else sex default.
+ *
+ * @details Empty user_weights falls back to MakeSexStratumEntryWeights.
+ * Non-empty vectors are validated against spec. Used for both init and
+ * recruit apportionment in explicit partitioned dynamics.
+ *
+ * @param spec Partition structure.
+ * @param user_weights Empty for default, or length n_strata().
+ * @param proportion_female Sex-default female share when user_weights empty.
+ */
+template <typename Type>
+std::vector<Type> ResolveStratumEntryWeights(
+    const PartitionSpec &spec, const std::vector<Type> &user_weights,
+    Type proportion_female) {
+  if (user_weights.empty()) {
+    return MakeSexStratumEntryWeights(spec, proportion_female);
+  }
+  ValidateStratumEntryWeights(spec, user_weights);
+  return user_weights;
+}
+
+/**
  * @brief Split a pooled at-age value into requested partition strata.
  *
  * @details No-op when demand is pooled (RequestedStrata is empty). Otherwise
