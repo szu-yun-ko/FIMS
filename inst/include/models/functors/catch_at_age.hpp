@@ -342,6 +342,13 @@ class CatchAtAge : public FisheryModelBase<Type> {
    * N_{a,0} = \exp(\log N_{a,0})
    * \f]
    *
+   * @details In explicit two-sex mode, also places the same pooled init onto
+   * strata via init_apportionment (or the sex default from proportion_female):
+   * \f[
+   * N_{a,0}^{s} = w^{\mathrm{init}}_{s}\, N_{a,0}
+   * \f]
+   * Model 1 (`sex_ratio_at_age`) leaves numbers_at_age_by_partition untouched.
+   *
    * @snippet{doc} this param_population
    * @snippet{doc} this param_i_age_year
    * @snippet{doc} this param_age
@@ -352,8 +359,45 @@ class CatchAtAge : public FisheryModelBase<Type> {
     std::map<std::string, fims::Vector<Type>> &dq_ =
         this->GetPopulationDerivedQuantities(population->GetId());
 
-    dq_["numbers_at_age"][i_age_year] =
-        fims_math::exp(population->log_init_naa[age]);
+    const Type pooled = fims_math::exp(population->log_init_naa[age]);
+    dq_["numbers_at_age"][i_age_year] = pooled;
+
+    if (population->sex_structure !=
+        fims_popdy::SexStructure::kExplicitTwoSex) {
+      return;
+    }
+
+    auto naa_it = dq_.find("numbers_at_age_by_partition");
+    if (naa_it == dq_.end()) {
+      throw std::invalid_argument(
+          "CatchAtAge::CalculateInitialNumbersAA explicit_two_sex missing "
+          "numbers_at_age_by_partition derived quantity.");
+    }
+
+    Type proportion_female = static_cast<Type>(0.5);
+    if (population->proportion_female.size() == 1) {
+      proportion_female = population->proportion_female[0];
+    } else if (age < population->proportion_female.size()) {
+      proportion_female = population->proportion_female[age];
+    }
+
+    const std::vector<Type> weights = fims_popdy::ResolveStratumEntryWeights(
+        population->partition_spec, population->init_apportionment,
+        proportion_female);
+
+    // Match pooled numbers_at_age: (n_years + 1) age-year planes per stratum.
+    const size_t naa_plane =
+        (population->n_years + 1) * population->n_ages;
+    if (naa_it->second.size() != weights.size() * naa_plane) {
+      throw std::invalid_argument(
+          "CatchAtAge::CalculateInitialNumbersAA explicit_two_sex found "
+          "invalid numbers_at_age_by_partition size.");
+    }
+
+    for (size_t stratum = 0; stratum < weights.size(); ++stratum) {
+      naa_it->second[stratum * naa_plane + i_age_year] =
+          weights[stratum] * pooled;
+    }
   }
 
   /**

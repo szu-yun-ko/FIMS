@@ -171,6 +171,71 @@ TEST_F(CAAEvaluateTestFixture,
   }
 }
 
+TEST_F(CAAEvaluateTestFixture,
+       ExplicitTwoSexInitialNumbersAAFillsPartitionFromInitWeights) {
+  population->sex_structure = fims_popdy::SexStructure::kExplicitTwoSex;
+  this->InitializeCAA();
+  catch_at_age_model->Initialize();
+
+  // User init weights: female 0.4, male 0.6.
+  population->init_apportionment = {0.4, 0.6};
+
+  size_t pop_id = population->GetId();
+  auto& dq = catch_at_age_model->GetPopulationDerivedQuantities(pop_id);
+  ASSERT_NE(dq.find("numbers_at_age_by_partition"), dq.end());
+
+  const size_t n_strata = population->partition_spec.n_strata();
+  ASSERT_EQ(n_strata, 2u);
+  const size_t naa_plane =
+      static_cast<size_t>((population->n_years + 1) * population->n_ages);
+
+  for (int age = 0; age < population->n_ages; age++) {
+    const int i_age_year = age;  // year 0
+    catch_at_age_model->CalculateInitialNumbersAA(population, i_age_year, age);
+
+    const double pooled = fims_math::exp(population->log_init_naa[age]);
+    EXPECT_DOUBLE_EQ(dq["numbers_at_age"][i_age_year], pooled);
+
+    const double female =
+        dq["numbers_at_age_by_partition"][0 * naa_plane + i_age_year];
+    const double male =
+        dq["numbers_at_age_by_partition"][1 * naa_plane + i_age_year];
+    EXPECT_DOUBLE_EQ(female, 0.4 * pooled);
+    EXPECT_DOUBLE_EQ(male, 0.6 * pooled);
+    EXPECT_DOUBLE_EQ(female + male, pooled);
+  }
+}
+
+TEST_F(CAAEvaluateTestFixture,
+       ExplicitTwoSexInitialNumbersAAEmptyWeightsUseProportionFemale) {
+  population->sex_structure = fims_popdy::SexStructure::kExplicitTwoSex;
+  this->InitializeCAA();
+  catch_at_age_model->Initialize();
+
+  population->init_apportionment.clear();
+  const double p_female = 0.35;
+  for (int age = 0; age < population->n_ages; age++) {
+    population->proportion_female[age] = p_female;
+  }
+
+  size_t pop_id = population->GetId();
+  auto& dq = catch_at_age_model->GetPopulationDerivedQuantities(pop_id);
+  const size_t naa_plane =
+      static_cast<size_t>((population->n_years + 1) * population->n_ages);
+
+  const int age = 3;
+  const int i_age_year = age;
+  catch_at_age_model->CalculateInitialNumbersAA(population, i_age_year, age);
+
+  const double pooled = fims_math::exp(population->log_init_naa[age]);
+  EXPECT_DOUBLE_EQ(
+      dq["numbers_at_age_by_partition"][0 * naa_plane + i_age_year],
+      p_female * pooled);
+  EXPECT_DOUBLE_EQ(
+      dq["numbers_at_age_by_partition"][1 * naa_plane + i_age_year],
+      (1.0 - p_female) * pooled);
+}
+
 // CatchAtAge_CalculateUnfishedNumbersAA and
 // CatchAtAge_CalculateUnfishedSpawningBiomass
 // IO correctness
