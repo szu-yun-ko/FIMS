@@ -335,6 +335,62 @@ TEST(SexStratumSplitFactors, RejectsAreaOnlyPartitionSpec) {
                std::invalid_argument);
 }
 
+TEST(ValidateStratumEntryWeights, AcceptsValidSexWeights) {
+  fims_popdy::PartitionSpec spec = fims_popdy::MakeDefaultSexPartitionSpec();
+  const std::vector<double> balanced = {0.3, 0.7};
+  const std::vector<double> all_male = {0.0, 1.0};
+  const std::vector<double> all_female = {1.0, 0.0};
+  EXPECT_NO_THROW(fims_popdy::ValidateStratumEntryWeights(spec, balanced));
+  EXPECT_NO_THROW(fims_popdy::ValidateStratumEntryWeights(spec, all_male));
+  EXPECT_NO_THROW(fims_popdy::ValidateStratumEntryWeights(spec, all_female));
+}
+
+TEST(ValidateStratumEntryWeights, RejectsWrongLength) {
+  fims_popdy::PartitionSpec spec = fims_popdy::MakeDefaultSexPartitionSpec();
+  const std::vector<double> too_short = {0.5};
+  const std::vector<double> too_long = {0.2, 0.3, 0.5};
+  EXPECT_THROW(fims_popdy::ValidateStratumEntryWeights(spec, too_short),
+               std::invalid_argument);
+  EXPECT_THROW(fims_popdy::ValidateStratumEntryWeights(spec, too_long),
+               std::invalid_argument);
+}
+
+TEST(ValidateStratumEntryWeights, RejectsNegativeWeight) {
+  fims_popdy::PartitionSpec spec = fims_popdy::MakeDefaultSexPartitionSpec();
+  const std::vector<double> negative = {-0.1, 1.1};
+  EXPECT_THROW(fims_popdy::ValidateStratumEntryWeights(spec, negative),
+               std::invalid_argument);
+}
+
+TEST(ValidateStratumEntryWeights, RejectsSumNotOne) {
+  fims_popdy::PartitionSpec spec = fims_popdy::MakeDefaultSexPartitionSpec();
+  const std::vector<double> bad_sum = {0.2, 0.2};
+  EXPECT_THROW(fims_popdy::ValidateStratumEntryWeights(spec, bad_sum),
+               std::invalid_argument);
+}
+
+TEST(MakeSexStratumEntryWeights, MatchesProportionFemaleSplit) {
+  fims_popdy::PartitionSpec spec = fims_popdy::MakeDefaultSexPartitionSpec();
+  const double p_female = 0.4;
+  const std::vector<double> weights =
+      fims_popdy::MakeSexStratumEntryWeights(spec, p_female);
+
+  ASSERT_EQ(weights.size(), 2);
+  EXPECT_DOUBLE_EQ(weights[0], p_female);
+  EXPECT_DOUBLE_EQ(weights[1], 1.0 - p_female);
+}
+
+TEST(MakeSexStratumEntryWeights, RejectsNonSexPartition) {
+  fims_popdy::PartitionSpec spec;
+  fims_popdy::Axis area_axis;
+  area_axis.name = "area";
+  area_axis.levels = {"north", "south"};
+  spec.axes.push_back(std::move(area_axis));
+
+  EXPECT_THROW(fims_popdy::MakeSexStratumEntryWeights(spec, 0.5),
+               std::invalid_argument);
+}
+
 TEST(IndexLayout, FoldedIndicesMatchYearAgeAndStratum) {
   fims_popdy::IndexLayout layout;
   layout.n_strata = 2;

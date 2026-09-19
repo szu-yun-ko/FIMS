@@ -582,6 +582,66 @@ std::vector<Type> SexStratumSplitFactors(const PartitionSpec &spec,
 }
 
 /**
+ * @brief Validate per-stratum entry weights (init or recruit apportionment).
+ *
+ * @details Weights must have length n_strata(), each entry >= 0, and sum to 1
+ * within tolerance. Used for explicit partitioned dynamics when placing
+ * initial numbers or recruits onto strata; separate from fleet sampling
+ * weights and from maturity-based reproductive contribution.
+ *
+ * @param spec Partition structure defining n_strata().
+ * @param weights One weight per stratum.
+ * @param tolerance Absolute tolerance for |sum(weights) - 1|.
+ */
+template <typename Type>
+void ValidateStratumEntryWeights(
+    const PartitionSpec &spec, const std::vector<Type> &weights,
+    Type tolerance = static_cast<Type>(1e-6)) {
+  if (weights.size() != spec.n_strata()) {
+    throw std::invalid_argument(
+        "ValidateStratumEntryWeights: weights size " +
+        std::to_string(weights.size()) + " does not match n_strata " +
+        std::to_string(spec.n_strata()));
+  }
+  Type sum = static_cast<Type>(0);
+  for (size_t i = 0; i < weights.size(); ++i) {
+    if (weights[i] < static_cast<Type>(0)) {
+      throw std::invalid_argument(
+          "ValidateStratumEntryWeights: weight at stratum " +
+          std::to_string(i) + " is negative");
+    }
+    sum += weights[i];
+  }
+  const Type deviation = sum - static_cast<Type>(1);
+  if (deviation > tolerance || deviation < -tolerance) {
+    throw std::invalid_argument(
+        "ValidateStratumEntryWeights: weights must sum to 1 within "
+        "tolerance");
+  }
+}
+
+/**
+ * @brief Sex-default entry weights from proportion_female.
+ *
+ * @details Same numeric result as SexStratumSplitFactors(), named for the
+ * init/recruit apportionment use case. Female stratum (0) gets
+ * proportion_female; male stratum (1) gets (1 - proportion_female). Validates
+ * the returned vector. For non-sex partitions, callers supply and validate
+ * their own length-n_strata weights.
+ *
+ * @param spec Sex-only partition (see MakeDefaultSexPartitionSpec()).
+ * @param proportion_female Female share at entry; in [0, 1].
+ */
+template <typename Type>
+std::vector<Type> MakeSexStratumEntryWeights(const PartitionSpec &spec,
+                                             Type proportion_female) {
+  std::vector<Type> weights =
+      SexStratumSplitFactors(spec, proportion_female);
+  ValidateStratumEntryWeights(spec, weights);
+  return weights;
+}
+
+/**
  * @brief Split a pooled at-age value into requested partition strata.
  *
  * @details No-op when demand is pooled (RequestedStrata is empty). Otherwise
