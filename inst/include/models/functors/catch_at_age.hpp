@@ -417,6 +417,10 @@ class CatchAtAge : public FisheryModelBase<Type> {
    * N_{A,y} = N_{A-1,y-1} \exp(-Z_{A-1,y-1}) + N_{A,y-1} \exp(-Z_{A,y-1})
    * \f]
    *
+   * @details In explicit two-sex mode the same updates run per stratum with
+   * mortality_Z_by_partition, then pooled numbers_at_age is the sum over
+   * strata. Model 1 (`sex_ratio_at_age`) uses pooled Z only.
+   *
    * @snippet{doc} this param_population
    * @snippet{doc} this param_i_age_year
    * @snippet{doc} this param_i_agem1_yearm1
@@ -425,11 +429,58 @@ class CatchAtAge : public FisheryModelBase<Type> {
   void CalculateNumbersAA(
       std::shared_ptr<fims_popdy::Population<Type>> &population,
       size_t i_age_year, size_t i_agem1_yearm1, size_t age) {
-    // using Z from previous age/year
-
     std::map<std::string, fims::Vector<Type>> &dq_ =
         this->GetPopulationDerivedQuantities(population->GetId());
 
+    if (population->sex_structure ==
+        fims_popdy::SexStructure::kExplicitTwoSex) {
+      auto naa_it = dq_.find("numbers_at_age_by_partition");
+      auto z_it = dq_.find("mortality_Z_by_partition");
+      if (naa_it == dq_.end() || z_it == dq_.end()) {
+        throw std::invalid_argument(
+            "CatchAtAge::CalculateNumbersAA explicit_two_sex missing "
+            "numbers_at_age_by_partition or mortality_Z_by_partition.");
+      }
+
+      const size_t mortality_plane = population->n_years * population->n_ages;
+      const size_t naa_plane =
+          (population->n_years + 1) * population->n_ages;
+      if (z_it->second.size() == 0 ||
+          z_it->second.size() % mortality_plane != 0) {
+        throw std::invalid_argument(
+            "CatchAtAge::CalculateNumbersAA explicit_two_sex found invalid "
+            "mortality_Z_by_partition size.");
+      }
+      const size_t n_strata = z_it->second.size() / mortality_plane;
+      if (naa_it->second.size() != n_strata * naa_plane) {
+        throw std::invalid_argument(
+            "CatchAtAge::CalculateNumbersAA explicit_two_sex found invalid "
+            "numbers_at_age_by_partition size.");
+      }
+
+      Type pooled = static_cast<Type>(0.0);
+      const bool is_plus_group = (age == (population->n_ages - 1));
+      for (size_t stratum = 0; stratum < n_strata; ++stratum) {
+        const size_t i_naa_curr = stratum * naa_plane + i_age_year;
+        const size_t i_naa_prev = stratum * naa_plane + i_agem1_yearm1;
+        const size_t i_z_prev = stratum * mortality_plane + i_agem1_yearm1;
+
+        Type n_stratum = naa_it->second[i_naa_prev] *
+                         fims_math::exp(-z_it->second[i_z_prev]);
+        if (is_plus_group) {
+          n_stratum += naa_it->second[i_naa_prev + 1] *
+                       fims_math::exp(
+                           -z_it->second[stratum * mortality_plane +
+                                         i_agem1_yearm1 + 1]);
+        }
+        naa_it->second[i_naa_curr] = n_stratum;
+        pooled += n_stratum;
+      }
+      dq_["numbers_at_age"][i_age_year] = pooled;
+      return;
+    }
+
+    // Model 1: pooled Z only.
     dq_["numbers_at_age"][i_age_year] =
         dq_["numbers_at_age"][i_agem1_yearm1] *
         (fims_math::exp(-dq_["mortality_Z"][i_agem1_yearm1]));
