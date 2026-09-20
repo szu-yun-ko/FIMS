@@ -688,6 +688,15 @@ class CatchAtAge : public FisheryModelBase<Type> {
    * p_{mature,a}
    * \f]
    *
+   * @details Model 1 (`sex_ratio_at_age`) uses the pooled formula above. In
+   * explicit two-sex mode, reproductive contribution is carried by
+   * per-stratum maturity (no \f$p_{female}\f$ in the sum):
+   * \f[
+   * SB_y \mathrel{+}= \sum_s N_{a,y}^{s}\, p_{\mathrm{mature},a}^{s}\, w_a
+   * \f]
+   * Weight is currently shared across strata. The sex default sets male
+   * maturity to 0, so this matches female-only SB at the same \f$N^{\mathrm{fem}}\f$.
+   *
    * @snippet{doc} this param_population
    * @snippet{doc} this param_i_age_year
    * @snippet{doc} this param_year
@@ -699,11 +708,43 @@ class CatchAtAge : public FisheryModelBase<Type> {
     std::map<std::string, fims::Vector<Type>> &dq_ =
         this->GetPopulationDerivedQuantities(population->GetId());
 
+    const Type weight = PopulationMeanWeightAA(population, year, age);
+
+    if (population->sex_structure ==
+        fims_popdy::SexStructure::kExplicitTwoSex) {
+      auto naa_it = dq_.find("numbers_at_age_by_partition");
+      auto mat_it = dq_.find("proportion_mature_at_age_by_partition");
+      if (naa_it == dq_.end() || mat_it == dq_.end()) {
+        throw std::invalid_argument(
+            "CatchAtAge::CalculateSpawningBiomass explicit_two_sex missing "
+            "numbers_at_age_by_partition or "
+            "proportion_mature_at_age_by_partition.");
+      }
+
+      const size_t n_strata = population->partition_spec.n_strata();
+      const size_t naa_plane =
+          (population->n_years + 1) * population->n_ages;
+      if (naa_it->second.size() != n_strata * naa_plane ||
+          mat_it->second.size() != n_strata * naa_plane) {
+        throw std::invalid_argument(
+            "CatchAtAge::CalculateSpawningBiomass explicit_two_sex found "
+            "invalid partitioned numbers or maturity size.");
+      }
+
+      Type contribution = static_cast<Type>(0.0);
+      for (size_t stratum = 0; stratum < n_strata; ++stratum) {
+        const size_t i_stratum = stratum * naa_plane + i_age_year;
+        contribution += naa_it->second[i_stratum] * mat_it->second[i_stratum] *
+                        weight;
+      }
+      dq_["spawning_biomass"][year] += contribution;
+      return;
+    }
+
     dq_["spawning_biomass"][year] +=
         population->proportion_female.get_force_scalar(age) *
         dq_["numbers_at_age"][i_age_year] *
-        dq_["proportion_mature_at_age"][i_age_year] *
-        PopulationMeanWeightAA(population, year, age);
+        dq_["proportion_mature_at_age"][i_age_year] * weight;
   }
 
   /**
