@@ -873,6 +873,12 @@ class CatchAtAge : public FisheryModelBase<Type> {
    * p_{mature,a} = \text{maturity}(a)
    * \f]
    *
+   * @details In explicit two-sex mode, also fills
+   * proportion_mature_at_age_by_partition with the sex-default policy: shared
+   * ogive on the female stratum, 0 on male (reproductive contribution is
+   * carried by maturity). Hook for later per-stratum maturity modules; does
+   * not yet change CalculateSpawningBiomass.
+   *
    * @snippet{doc} this param_population
    * @snippet{doc} this param_i_age_year
    * @snippet{doc} this param_age
@@ -883,8 +889,43 @@ class CatchAtAge : public FisheryModelBase<Type> {
     std::map<std::string, fims::Vector<Type>> &dq_ =
         this->GetPopulationDerivedQuantities(population->GetId());
 
-    dq_["proportion_mature_at_age"][i_age_year] =
+    const Type p_mature =
         population->maturity->evaluate(population->ages[age]);
+    dq_["proportion_mature_at_age"][i_age_year] = p_mature;
+
+    if (population->sex_structure !=
+        fims_popdy::SexStructure::kExplicitTwoSex) {
+      return;
+    }
+
+    auto mat_it = dq_.find("proportion_mature_at_age_by_partition");
+    if (mat_it == dq_.end()) {
+      throw std::invalid_argument(
+          "CatchAtAge::CalculateMaturityAA explicit_two_sex missing "
+          "proportion_mature_at_age_by_partition derived quantity.");
+    }
+
+    const size_t n_strata = population->partition_spec.n_strata();
+    const size_t maturity_plane =
+        (population->n_years + 1) * population->n_ages;
+    if (mat_it->second.size() != n_strata * maturity_plane) {
+      throw std::invalid_argument(
+          "CatchAtAge::CalculateMaturityAA explicit_two_sex found invalid "
+          "proportion_mature_at_age_by_partition size.");
+    }
+
+    // Sex default: female stratum gets the shared ogive; male gets 0.
+    // Later: replace with per-stratum maturity modules when available.
+    for (size_t stratum = 0; stratum < n_strata; ++stratum) {
+      Type stratum_mature = static_cast<Type>(0.0);
+      if (population->partition_spec.axes.size() == 1 &&
+          population->partition_spec.axes[0].name == "sex" &&
+          stratum < population->partition_spec.axes[0].levels.size() &&
+          population->partition_spec.axes[0].levels[stratum] == "female") {
+        stratum_mature = p_mature;
+      }
+      mat_it->second[stratum * maturity_plane + i_age_year] = stratum_mature;
+    }
   }
 
   /**

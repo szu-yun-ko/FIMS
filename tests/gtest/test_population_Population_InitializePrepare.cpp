@@ -50,6 +50,7 @@ TEST_F(CAAInitializeTestFixture, HandlesCorrectInput_Population_InitializeCAA) {
   EXPECT_EQ(dq.find("mortality_F_by_partition"), dq.end());
   EXPECT_EQ(dq.find("mortality_Z_by_partition"), dq.end());
   EXPECT_EQ(dq.find("proportion_female_at_age_year"), dq.end());
+  EXPECT_EQ(dq.find("proportion_mature_at_age_by_partition"), dq.end());
 }
 
 TEST_F(CAAInitializeTestFixture,
@@ -60,6 +61,8 @@ TEST_F(CAAInitializeTestFixture,
   const size_t n_strata = fims_popdy::MakeDefaultSexPartitionSpec().n_strata();
 
   EXPECT_EQ(dq["numbers_at_age_by_partition"].size(),
+            n_strata * (n_years + 1) * n_ages);
+  EXPECT_EQ(dq["proportion_mature_at_age_by_partition"].size(),
             n_strata * (n_years + 1) * n_ages);
   EXPECT_EQ(dq["mortality_M_by_partition"].size(),
             n_strata * n_years * n_ages);

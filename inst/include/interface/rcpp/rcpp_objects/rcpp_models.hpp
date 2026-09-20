@@ -1200,6 +1200,19 @@ class CatchAtAgeInterface : public FisheryModelInterfaceBase {
             [population_interface->numbers_at_age_by_partition.id_m] =
             &derived_quantities["numbers_at_age_by_partition"];
 
+        derived_quantities["proportion_mature_at_age_by_partition"] =
+            fims::Vector<Type>(partitioned_numbers_size);
+        derived_quantities_dim_info["proportion_mature_at_age_by_partition"] =
+            fims_popdy::DimensionInfo(
+                "proportion_mature_at_age_by_partition",
+                fims::Vector<int>{static_cast<int>(n_strata),
+                                  static_cast<int>(n_years + 1),
+                                  static_cast<int>(n_ages)},
+                fims::Vector<std::string>{"n_strata", "n_years+1", "n_ages"});
+        info->variable_map
+            [population_interface->proportion_mature_at_age_by_partition.id_m] =
+            &derived_quantities["proportion_mature_at_age_by_partition"];
+
         derived_quantities["mortality_M_by_partition"] =
             fims::Vector<Type>(partitioned_mortality_size);
         derived_quantities_dim_info["mortality_M_by_partition"] =

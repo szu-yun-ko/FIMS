@@ -57,6 +57,8 @@ void register_population(Rcpp::Module& m) {
              &PopulationInterface::unfished_spawning_biomass)
       .field("proportion_mature_at_age",
              &PopulationInterface::proportion_mature_at_age)
+      .field("proportion_mature_at_age_by_partition",
+             &PopulationInterface::proportion_mature_at_age_by_partition)
       .field("proportion_female_at_age_year",
              &PopulationInterface::proportion_female_at_age_year)
       .field("expected_recruitment", &PopulationInterface::expected_recruitment)

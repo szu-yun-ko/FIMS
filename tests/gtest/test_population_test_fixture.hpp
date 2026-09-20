@@ -130,6 +130,8 @@ class CAAInitializeTestFixture : public testing::Test {
         const size_t n_ages = this->catch_at_age_model->populations[p]->n_ages;
         derived_quantities["numbers_at_age_by_partition"] = fims::Vector<double>(
             n_strata * (n_years + 1) * n_ages);
+        derived_quantities["proportion_mature_at_age_by_partition"] =
+            fims::Vector<double>(n_strata * (n_years + 1) * n_ages);
         derived_quantities["mortality_M_by_partition"] =
             fims::Vector<double>(n_strata * n_years * n_ages);
         derived_quantities["mortality_F_by_partition"] =
@@ -518,6 +520,8 @@ class CAAEvaluateTestFixture : public testing::Test {
         const size_t n_ages = this->catch_at_age_model->populations[p]->n_ages;
         derived_quantities["numbers_at_age_by_partition"] = fims::Vector<double>(
             n_strata * (n_years + 1) * n_ages);
+        derived_quantities["proportion_mature_at_age_by_partition"] =
+            fims::Vector<double>(n_strata * (n_years + 1) * n_ages);
         derived_quantities["mortality_M_by_partition"] =
             fims::Vector<double>(n_strata * n_years * n_ages);
         derived_quantities["mortality_F_by_partition"] =
@@ -843,6 +847,8 @@ class CAAPrepareTestFixture : public testing::Test {
         const size_t n_ages = this->catch_at_age_model->populations[p]->n_ages;
         derived_quantities["numbers_at_age_by_partition"] = fims::Vector<double>(
             n_strata * (n_years + 1) * n_ages);
+        derived_quantities["proportion_mature_at_age_by_partition"] =
+            fims::Vector<double>(n_strata * (n_years + 1) * n_ages);
         derived_quantities["mortality_M_by_partition"] =
             fims::Vector<double>(n_strata * n_years * n_ages);
         derived_quantities["mortality_F_by_partition"] =

@@ -271,6 +271,14 @@ class PopulationInterface : public PopulationInterfaceBase {
    */
   VariableVector proportion_mature_at_age;
   /**
+   * @brief Maturity at age by partition stratum (explicit two-sex only).
+   *
+   * @details Size n_strata x (n_years+1) x n_ages. Sex default: shared
+   * maturity ogive on the female stratum, 0 on male (reproductive
+   * contribution via maturity). Hook for later per-stratum maturity modules.
+   */
+  VariableVector proportion_mature_at_age_by_partition;
+  /**
    * @brief Female proportion at age and year (explicit two-sex only).
    *
    * @details Size n_ages x n_years. Model 1 keeps scalar / age-only
@@ -344,6 +352,8 @@ class PopulationInterface : public PopulationInterfaceBase {
         unfished_biomass(other.unfished_biomass),
         unfished_spawning_biomass(other.unfished_spawning_biomass),
         proportion_mature_at_age(other.proportion_mature_at_age),
+        proportion_mature_at_age_by_partition(
+            other.proportion_mature_at_age_by_partition),
         proportion_female_at_age_year(other.proportion_female_at_age_year),
         expected_recruitment(other.expected_recruitment),
         sum_selectivity(other.sum_selectivity) {}
