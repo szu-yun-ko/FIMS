@@ -310,4 +310,77 @@ TEST_F(
     EXPECT_GT(dq["unfished_spawning_biomass"][year], 0.0);
   }
 }
+
+TEST_F(CAAEvaluateTestFixture,
+       ExplicitTwoSexUnfishedSpawningBiomassUsesRecruitWeights) {
+  population->sex_structure = fims_popdy::SexStructure::kExplicitTwoSex;
+  this->InitializeCAA();
+  catch_at_age_model->Initialize();
+  catch_at_age_model->Prepare();
+
+  size_t pop_id = population->GetId();
+  auto& dq = catch_at_age_model->GetPopulationDerivedQuantities(pop_id);
+  ASSERT_NE(dq.find("proportion_mature_at_age_by_partition"), dq.end());
+
+  const size_t naa_plane =
+      static_cast<size_t>((population->n_years + 1) * population->n_ages);
+  const int year = 4;
+  const int age = 6;
+  const int i_age_year = year * population->n_ages + age;
+  const double unfished_n = 500.0;
+  dq["unfished_numbers_at_age"][i_age_year] = unfished_n;
+  population->recruit_apportionment = {0.4, 0.6};
+  population->proportion_female[age] = 0.9;
+
+  catch_at_age_model->CalculateMaturityAA(population, i_age_year, age);
+  dq["unfished_spawning_biomass"][year] = 0.0;
+  catch_at_age_model->CalculateUnfishedSpawningBiomass(population, i_age_year,
+                                                       year, age);
+
+  const double p_mature_female =
+      dq["proportion_mature_at_age_by_partition"][0 * naa_plane + i_age_year];
+  const double weight =
+      population->growth->evaluate(year, population->ages[age]);
+  EXPECT_DOUBLE_EQ(dq["unfished_spawning_biomass"][year],
+                   0.4 * unfished_n * p_mature_female * weight);
+}
+
+TEST_F(CAAEvaluateTestFixture,
+       ExplicitTwoSexSBPR0MatchesFemaleMatureBiomassPerRecruit) {
+  population->sex_structure = fims_popdy::SexStructure::kExplicitTwoSex;
+  this->InitializeCAA();
+  catch_at_age_model->Initialize();
+  catch_at_age_model->Prepare();
+
+  size_t pop_id = population->GetId();
+  auto& dq = catch_at_age_model->GetPopulationDerivedQuantities(pop_id);
+  const double p_female = 0.35;
+  population->recruit_apportionment.clear();
+  for (int age = 0; age < population->n_ages; age++) {
+    population->proportion_female[age] = p_female;
+    catch_at_age_model->CalculateMaturityAA(population, age, age);
+  }
+
+  const double phi_0 = catch_at_age_model->CalculateSBPR0(population);
+
+  std::vector<double> numbers_spr(population->n_ages, 1.0);
+  for (int a = 1; a < population->n_ages - 1; a++) {
+    numbers_spr[a] = numbers_spr[a - 1] * std::exp(-population->M[a]);
+  }
+  numbers_spr[population->n_ages - 1] =
+      (numbers_spr[population->n_ages - 2] *
+       std::exp(-population->M[population->n_ages - 2])) /
+      (1.0 - std::exp(-population->M[population->n_ages - 1]));
+
+  double expected = 0.0;
+  for (int age = 0; age < population->n_ages; age++) {
+    const double p_mature =
+        dq["proportion_mature_at_age_by_partition"][age];
+    const double weight =
+        population->growth->evaluate(0, population->ages[age]);
+    expected += p_female * numbers_spr[age] * p_mature * weight;
+  }
+  EXPECT_NEAR(phi_0, expected, 1e-8);
+  EXPECT_GT(phi_0, 0.0);
+}
 }  // namespace

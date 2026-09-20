@@ -757,6 +757,15 @@ class CatchAtAge : public FisheryModelBase<Type> {
    * p_{mature,a}
    * \f]
    *
+   * @details Model 1 uses the pooled formula above. In explicit two-sex mode,
+   * unfished numbers are still pooled, so they are placed onto strata with
+   * recruit_apportionment (sex default from proportion_female) and then
+   * summed with per-stratum maturity:
+   * \f[
+   * SB^U_y \mathrel{+}= \sum_s w^{\mathrm{rec}}_{s}\, N^U_{a,y}\,
+   * p_{\mathrm{mature},a}^{s}\, w_a
+   * \f]
+   *
    * @snippet{doc} this param_population
    * @snippet{doc} this param_i_age_year
    * @snippet{doc} this param_year
@@ -768,11 +777,52 @@ class CatchAtAge : public FisheryModelBase<Type> {
     std::map<std::string, fims::Vector<Type>> &dq_ =
         this->GetPopulationDerivedQuantities(population->GetId());
 
+    const Type weight = PopulationMeanWeightAA(population, year, age);
+
+    if (population->sex_structure ==
+        fims_popdy::SexStructure::kExplicitTwoSex) {
+      auto mat_it = dq_.find("proportion_mature_at_age_by_partition");
+      if (mat_it == dq_.end()) {
+        throw std::invalid_argument(
+            "CatchAtAge::CalculateUnfishedSpawningBiomass explicit_two_sex "
+            "missing proportion_mature_at_age_by_partition.");
+      }
+
+      Type proportion_female = static_cast<Type>(0.5);
+      if (population->proportion_female.size() == 1) {
+        proportion_female = population->proportion_female[0];
+      } else if (age < population->proportion_female.size()) {
+        proportion_female = population->proportion_female[age];
+      }
+      const std::vector<Type> weights = fims_popdy::ResolveStratumEntryWeights(
+          population->partition_spec, population->recruit_apportionment,
+          proportion_female);
+
+      const size_t n_strata = population->partition_spec.n_strata();
+      const size_t naa_plane =
+          (population->n_years + 1) * population->n_ages;
+      if (mat_it->second.size() != n_strata * naa_plane ||
+          weights.size() != n_strata) {
+        throw std::invalid_argument(
+            "CatchAtAge::CalculateUnfishedSpawningBiomass explicit_two_sex "
+            "found invalid maturity or recruit-weight size.");
+      }
+
+      const Type unfished_n = dq_["unfished_numbers_at_age"][i_age_year];
+      Type contribution = static_cast<Type>(0.0);
+      for (size_t stratum = 0; stratum < n_strata; ++stratum) {
+        const size_t i_stratum = stratum * naa_plane + i_age_year;
+        contribution += weights[stratum] * unfished_n *
+                        mat_it->second[i_stratum] * weight;
+      }
+      dq_["unfished_spawning_biomass"][year] += contribution;
+      return;
+    }
+
     dq_["unfished_spawning_biomass"][year] +=
         population->proportion_female.get_force_scalar(age) *
         dq_["unfished_numbers_at_age"][i_age_year] *
-        dq_["proportion_mature_at_age"][i_age_year] *
-        PopulationMeanWeightAA(population, year, age);
+        dq_["proportion_mature_at_age"][i_age_year] * weight;
   }
 
   /**
@@ -818,6 +868,14 @@ class CatchAtAge : public FisheryModelBase<Type> {
    * N_A = \frac{N_{A-1} \times \exp(-M_{A-1})}{1 - \exp(-M_A)}
    * \f]
    *
+   * @details Model 1 uses the pooled formula above. In explicit two-sex mode,
+   * the same unfished numbers-per-recruit are placed onto strata with
+   * recruit_apportionment and summed with per-stratum maturity:
+   * \f[
+   * \phi_0 = \sum_a\sum_s w^{\mathrm{rec}}_{s}\, N_a\,
+   * p_{\mathrm{mature},a}^{s}\, w_a
+   * \f]
+   *
    * @snippet{doc} this param_population
    * @return Type
    */
@@ -827,29 +885,63 @@ class CatchAtAge : public FisheryModelBase<Type> {
         this->GetPopulationDerivedQuantities(population->GetId());
 
     std::vector<Type> numbers_spr(population->n_ages, 1.0);
-    Type phi_0 = 0.0;
-    phi_0 += numbers_spr[0] *
-             population->proportion_female.get_force_scalar(0) *
-             dq_["proportion_mature_at_age"][0] *
-             PopulationMeanWeightAA(population, 0, 0);
     for (size_t a = 1; a < (population->n_ages - 1); a++) {
       numbers_spr[a] = numbers_spr[a - 1] * fims_math::exp(-population->M[a]);
-      phi_0 += numbers_spr[a] *
-               population->proportion_female.get_force_scalar(a) *
-               dq_["proportion_mature_at_age"][a] *
-               PopulationMeanWeightAA(population, 0, a);
     }
-
     numbers_spr[population->n_ages - 1] =
         (numbers_spr[population->n_ages - 2] *
          fims_math::exp(-population->M[population->n_ages - 2])) /
         (1 - fims_math::exp(-population->M[population->n_ages - 1]));
-    phi_0 +=
-        numbers_spr[population->n_ages - 1] *
-        population->proportion_female.get_force_scalar(population->n_ages - 1) *
-        dq_["proportion_mature_at_age"][population->n_ages - 1] *
-        PopulationMeanWeightAA(population, 0, population->n_ages - 1);
 
+    Type phi_0 = static_cast<Type>(0.0);
+    if (population->sex_structure ==
+        fims_popdy::SexStructure::kExplicitTwoSex) {
+      auto mat_it = dq_.find("proportion_mature_at_age_by_partition");
+      if (mat_it == dq_.end()) {
+        throw std::invalid_argument(
+            "CatchAtAge::CalculateSBPR0 explicit_two_sex missing "
+            "proportion_mature_at_age_by_partition.");
+      }
+      const size_t n_strata = population->partition_spec.n_strata();
+      const size_t naa_plane =
+          (population->n_years + 1) * population->n_ages;
+      if (mat_it->second.size() != n_strata * naa_plane) {
+        throw std::invalid_argument(
+            "CatchAtAge::CalculateSBPR0 explicit_two_sex found invalid "
+            "proportion_mature_at_age_by_partition size.");
+      }
+      for (size_t age = 0; age < population->n_ages; ++age) {
+        Type proportion_female = static_cast<Type>(0.5);
+        if (population->proportion_female.size() == 1) {
+          proportion_female = population->proportion_female[0];
+        } else if (age < population->proportion_female.size()) {
+          proportion_female = population->proportion_female[age];
+        }
+        const std::vector<Type> weights =
+            fims_popdy::ResolveStratumEntryWeights(
+                population->partition_spec, population->recruit_apportionment,
+                proportion_female);
+        if (weights.size() != n_strata) {
+          throw std::invalid_argument(
+              "CatchAtAge::CalculateSBPR0 explicit_two_sex found invalid "
+              "recruit-weight size.");
+        }
+        const Type weight = PopulationMeanWeightAA(population, 0, age);
+        for (size_t stratum = 0; stratum < n_strata; ++stratum) {
+          const size_t i_stratum = stratum * naa_plane + age;
+          phi_0 += weights[stratum] * numbers_spr[age] *
+                   mat_it->second[i_stratum] * weight;
+        }
+      }
+      return phi_0;
+    }
+
+    for (size_t age = 0; age < population->n_ages; ++age) {
+      phi_0 += numbers_spr[age] *
+               population->proportion_female.get_force_scalar(age) *
+               dq_["proportion_mature_at_age"][age] *
+               PopulationMeanWeightAA(population, 0, age);
+    }
     return phi_0;
   }
 
