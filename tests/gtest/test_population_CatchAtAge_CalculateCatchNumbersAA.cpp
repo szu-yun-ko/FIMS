@@ -111,4 +111,70 @@ TEST_F(CAAEvaluateTestFixture, FemaleDemandWritesCatchByPartition) {
                      0.0);
   }
 }
+
+TEST_F(CAAEvaluateTestFixture,
+       ExplicitTwoSexCatchNumbersAAUsesNumbersByPartition) {
+  population->sex_structure = fims_popdy::SexStructure::kExplicitTwoSex;
+  this->InitializeCAA();
+  catch_at_age_model->Initialize();
+  catch_at_age_model->Prepare();
+  population->partition_demand =
+      fims_popdy::MakeSexPartitionDemand({"female", "male"});
+
+  size_t pop_id = population->GetId();
+  auto& dq_pop = catch_at_age_model->GetPopulationDerivedQuantities(pop_id);
+  const size_t naa_plane =
+      static_cast<size_t>((population->n_years + 1) * population->n_ages);
+  const size_t mortality_plane =
+      static_cast<size_t>(population->n_years * population->n_ages);
+
+  catch_at_age_model->CalculateMortality(population, i_age_year, year, age);
+  const double n_female = 800.0;
+  const double n_male = 200.0;
+  const double z_female = 0.3;
+  const double z_male = 0.8;
+  dq_pop["numbers_at_age_by_partition"][0 * naa_plane + i_age_year] = n_female;
+  dq_pop["numbers_at_age_by_partition"][1 * naa_plane + i_age_year] = n_male;
+  dq_pop["mortality_Z_by_partition"][0 * mortality_plane + i_age_year] =
+      z_female;
+  dq_pop["mortality_Z_by_partition"][1 * mortality_plane + i_age_year] = z_male;
+  population->proportion_female[age] = 0.9;
+
+  catch_at_age_model->CalculateCatchNumbersAA(population, i_age_year, year,
+                                              age);
+  catch_at_age_model->CalculateCatchWeightAA(population, year, age);
+
+  for (size_t fleet_index = 0; fleet_index < population->n_fleets;
+       fleet_index++) {
+    uint32_t fleet_id = population->fleets[fleet_index]->GetId();
+    auto& dq_fleet = catch_at_age_model->GetFleetDerivedQuantities(fleet_id);
+    const size_t female_idx =
+        population->index_layout.i_stratum_age_year(0, year, age);
+    const size_t male_idx =
+        population->index_layout.i_stratum_age_year(1, year, age);
+    const double s = population->fleets[fleet_index]
+                         ->GetSelectivityForStratum(0)
+                         ->evaluate(population->ages[age], year);
+    const double f = population->fleets[fleet_index]->Fmort[year] *
+                     population->f_multiplier[year] * s;
+    const double c_female =
+        (f / z_female) * n_female * (1.0 - std::exp(-z_female));
+    const double c_male = (f / z_male) * n_male * (1.0 - std::exp(-z_male));
+    const double w =
+        population->growth->evaluate(year, population->ages[age]);
+
+    EXPECT_NEAR(dq_fleet["catch_numbers_at_age_by_partition"][female_idx],
+                c_female, 1e-8);
+    EXPECT_NEAR(dq_fleet["catch_numbers_at_age_by_partition"][male_idx],
+                c_male, 1e-8);
+    EXPECT_NEAR(dq_fleet["catch_numbers_at_age"][i_age_year],
+                c_female + c_male, 1e-8);
+    EXPECT_NEAR(dq_fleet["catch_weight_at_age_by_partition"][female_idx],
+                c_female * w, 1e-8);
+    EXPECT_NEAR(dq_fleet["catch_weight_at_age_by_partition"][male_idx],
+                c_male * w, 1e-8);
+    EXPECT_NE(dq_fleet["catch_numbers_at_age_by_partition"][female_idx],
+              dq_fleet["catch_numbers_at_age"][i_age_year] * 0.9);
+  }
+}
 }  // namespace

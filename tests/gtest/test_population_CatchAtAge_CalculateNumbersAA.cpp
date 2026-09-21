@@ -65,4 +65,134 @@ TEST_F(CAAEvaluateTestFixture, HandlesEdgeCase_CatchAtAge_CalculateNumbersAA) {
   EXPECT_EQ(dq["numbers_at_age"][i_age_year], test_naa[i_age_year]);
   EXPECT_GT(dq["numbers_at_age"][i_age_year], 0);
 }
+
+TEST_F(CAAEvaluateTestFixture,
+       ExplicitTwoSexNumbersAASurvivesWithStratumSpecificZ) {
+  population->sex_structure = fims_popdy::SexStructure::kExplicitTwoSex;
+  this->InitializeCAA();
+  catch_at_age_model->Initialize();
+  catch_at_age_model->Prepare();
+
+  size_t pop_id = population->GetId();
+  auto& dq = catch_at_age_model->GetPopulationDerivedQuantities(pop_id);
+  ASSERT_NE(dq.find("numbers_at_age_by_partition"), dq.end());
+  ASSERT_NE(dq.find("mortality_Z_by_partition"), dq.end());
+
+  const size_t mortality_plane =
+      static_cast<size_t>(population->n_years * population->n_ages);
+  const size_t naa_plane =
+      static_cast<size_t>((population->n_years + 1) * population->n_ages);
+
+  const int year = 4;
+  const int age = 6;
+  const int i_curr = year * population->n_ages + age;
+  const int i_prev = (year - 1) * population->n_ages + (age - 1);
+
+  // Seed previous N^s and sex-specific Z so tracks diverge.
+  const double n_female_prev = 1000.0;
+  const double n_male_prev = 1000.0;
+  const double z_female = 0.2;
+  const double z_male = 0.5;
+  dq["numbers_at_age_by_partition"][0 * naa_plane + i_prev] = n_female_prev;
+  dq["numbers_at_age_by_partition"][1 * naa_plane + i_prev] = n_male_prev;
+  dq["mortality_Z_by_partition"][0 * mortality_plane + i_prev] = z_female;
+  dq["mortality_Z_by_partition"][1 * mortality_plane + i_prev] = z_male;
+
+  catch_at_age_model->CalculateNumbersAA(population, i_curr, i_prev, age);
+
+  const double female_curr =
+      dq["numbers_at_age_by_partition"][0 * naa_plane + i_curr];
+  const double male_curr =
+      dq["numbers_at_age_by_partition"][1 * naa_plane + i_curr];
+  EXPECT_DOUBLE_EQ(female_curr, n_female_prev * std::exp(-z_female));
+  EXPECT_DOUBLE_EQ(male_curr, n_male_prev * std::exp(-z_male));
+  EXPECT_NE(female_curr, male_curr);
+  EXPECT_DOUBLE_EQ(dq["numbers_at_age"][i_curr], female_curr + male_curr);
+}
+
+TEST_F(CAAEvaluateTestFixture,
+       ExplicitTwoSexNumbersAAPlusGroupUsesStratumSpecificZ) {
+  population->sex_structure = fims_popdy::SexStructure::kExplicitTwoSex;
+  this->InitializeCAA();
+  catch_at_age_model->Initialize();
+  catch_at_age_model->Prepare();
+
+  size_t pop_id = population->GetId();
+  auto& dq = catch_at_age_model->GetPopulationDerivedQuantities(pop_id);
+
+  const size_t mortality_plane =
+      static_cast<size_t>(population->n_years * population->n_ages);
+  const size_t naa_plane =
+      static_cast<size_t>((population->n_years + 1) * population->n_ages);
+
+  const int year = 4;
+  const int age = population->n_ages - 1;
+  const int i_curr = year * population->n_ages + age;
+  const int i_prev = (year - 1) * population->n_ages + (age - 1);
+  const int i_plus_prev = i_prev + 1;  // age A in year y-1
+
+  const double n_am1_f = 200.0;
+  const double n_a_f = 300.0;
+  const double n_am1_m = 200.0;
+  const double n_a_m = 300.0;
+  const double z_am1_f = 0.1;
+  const double z_a_f = 0.2;
+  const double z_am1_m = 0.4;
+  const double z_a_m = 0.5;
+
+  dq["numbers_at_age_by_partition"][0 * naa_plane + i_prev] = n_am1_f;
+  dq["numbers_at_age_by_partition"][0 * naa_plane + i_plus_prev] = n_a_f;
+  dq["numbers_at_age_by_partition"][1 * naa_plane + i_prev] = n_am1_m;
+  dq["numbers_at_age_by_partition"][1 * naa_plane + i_plus_prev] = n_a_m;
+  dq["mortality_Z_by_partition"][0 * mortality_plane + i_prev] = z_am1_f;
+  dq["mortality_Z_by_partition"][0 * mortality_plane + i_plus_prev] = z_a_f;
+  dq["mortality_Z_by_partition"][1 * mortality_plane + i_prev] = z_am1_m;
+  dq["mortality_Z_by_partition"][1 * mortality_plane + i_plus_prev] = z_a_m;
+
+  catch_at_age_model->CalculateNumbersAA(population, i_curr, i_prev, age);
+
+  const double female_curr =
+      n_am1_f * std::exp(-z_am1_f) + n_a_f * std::exp(-z_a_f);
+  const double male_curr =
+      n_am1_m * std::exp(-z_am1_m) + n_a_m * std::exp(-z_a_m);
+  EXPECT_DOUBLE_EQ(
+      dq["numbers_at_age_by_partition"][0 * naa_plane + i_curr], female_curr);
+  EXPECT_DOUBLE_EQ(
+      dq["numbers_at_age_by_partition"][1 * naa_plane + i_curr], male_curr);
+  EXPECT_NE(female_curr, male_curr);
+  EXPECT_DOUBLE_EQ(dq["numbers_at_age"][i_curr], female_curr + male_curr);
+}
+
+TEST_F(CAAEvaluateTestFixture,
+       ExplicitTwoSexProportionFemaleAtAgeYearFromNumbers) {
+  population->sex_structure = fims_popdy::SexStructure::kExplicitTwoSex;
+  this->InitializeCAA();
+  catch_at_age_model->Initialize();
+
+  size_t pop_id = population->GetId();
+  auto& dq = catch_at_age_model->GetPopulationDerivedQuantities(pop_id);
+  ASSERT_NE(dq.find("proportion_female_at_age_year"), dq.end());
+
+  const size_t naa_plane =
+      static_cast<size_t>((population->n_years + 1) * population->n_ages);
+  const int year = 4;
+  const int age = 6;
+  const int i_age_year = year * population->n_ages + age;
+  dq["numbers_at_age_by_partition"][0 * naa_plane + i_age_year] = 800.0;
+  dq["numbers_at_age_by_partition"][1 * naa_plane + i_age_year] = 200.0;
+
+  catch_at_age_model->CalculateProportionFemaleAtAgeYear(population, i_age_year,
+                                                         year, age);
+  EXPECT_DOUBLE_EQ(dq["proportion_female_at_age_year"][i_age_year], 0.8);
+
+  dq["spawning_biomass"][year] = 0.0;
+  catch_at_age_model->CalculateMaturityAA(population, i_age_year, age);
+  catch_at_age_model->CalculateSpawningBiomass(population, i_age_year, year,
+                                               age);
+  const double sb_from_n =
+      800.0 *
+      dq["proportion_mature_at_age_by_partition"][0 * naa_plane + i_age_year] *
+      population->growth->evaluate(year, population->ages[age]);
+  EXPECT_DOUBLE_EQ(dq["spawning_biomass"][year], sb_from_n);
+}
 }  // namespace

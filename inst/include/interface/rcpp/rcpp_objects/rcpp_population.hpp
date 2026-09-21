@@ -166,6 +166,31 @@ class PopulationInterface : public PopulationInterfaceBase {
    * @brief The name for the population.
    */
   SharedString name = fims::to_string("NA");
+  /**
+   * @brief Sex-structure model for population dynamics.
+   *
+   * @details Allowed values: "sex_ratio_at_age" (default) or "explicit_two_sex".
+   * Orthogonal to partition demand, which only selects output planes.
+   */
+  SharedString sex_structure = fims::to_string("sex_ratio_at_age");
+  /**
+   * @brief Per-stratum init apportionment weights (explicit mode).
+   *
+   * @details Empty means sex default from proportion_female. Shared so the
+   * R-facing instance and live_objects clone stay in sync. Configure with
+   * SetInitApportionment() / GetInitApportionment().
+   */
+  std::shared_ptr<std::vector<double>> init_apportionment =
+      std::make_shared<std::vector<double>>();
+  /**
+   * @brief Per-stratum recruit apportionment weights (explicit mode).
+   *
+   * @details Empty means sex default from proportion_female. Shared so the
+   * R-facing instance and live_objects clone stay in sync. Configure with
+   * SetRecruitApportionment() / GetRecruitApportionment().
+   */
+  std::shared_ptr<std::vector<double>> recruit_apportionment =
+      std::make_shared<std::vector<double>>();
 
   // Population based derived quantities
   /**
@@ -184,21 +209,37 @@ class PopulationInterface : public PopulationInterfaceBase {
    * @brief Total annual fishing mortality a population is subject to.
    */
   VariableVector mortality_F;
+  /**
+   * @brief Fishing mortality by partition stratum (explicit two-sex only).
+   */
+  VariableVector mortality_F_by_partition;
 
   /**
    * @brief Total annual natural mortality a population is subject to.
    */
   VariableVector mortality_M;
+  /**
+   * @brief Natural mortality by partition stratum (explicit two-sex only).
+   */
+  VariableVector mortality_M_by_partition;
 
   /**
    * @brief Total annual mortality a population is subject to.
    */
   VariableVector mortality_Z;
+  /**
+   * @brief Total mortality by partition stratum (explicit two-sex only).
+   */
+  VariableVector mortality_Z_by_partition;
 
   /**
    * @brief Current population composition in numbers at age.
    */
   VariableVector numbers_at_age;
+  /**
+   * @brief Numbers at age by partition stratum (explicit two-sex only).
+   */
+  VariableVector numbers_at_age_by_partition;
 
   /**
    * @brief Theoretical population composition in numbers at age if no fishing
@@ -229,6 +270,21 @@ class PopulationInterface : public PopulationInterfaceBase {
    * each age.
    */
   VariableVector proportion_mature_at_age;
+  /**
+   * @brief Maturity at age by partition stratum (explicit two-sex only).
+   *
+   * @details Size n_strata x (n_years+1) x n_ages. Sex default: shared
+   * maturity ogive on the female stratum, 0 on male (reproductive
+   * contribution via maturity). Hook for later per-stratum maturity modules.
+   */
+  VariableVector proportion_mature_at_age_by_partition;
+  /**
+   * @brief Female proportion at age and year (explicit two-sex only).
+   *
+   * @details Size n_ages x n_years. Model 1 keeps scalar / age-only
+   * proportion_female; this DQ is allocated only for explicit_two_sex.
+   */
+  VariableVector proportion_female_at_age_year;
   /**
    * @brief Model-expected recruitment each year based on the stock--recruit
    * relationship.
@@ -277,18 +333,28 @@ class PopulationInterface : public PopulationInterfaceBase {
         partition_demand(other.partition_demand),
         ages(other.ages),
         name(other.name),
+        sex_structure(other.sex_structure),
+        init_apportionment(other.init_apportionment),
+        recruit_apportionment(other.recruit_apportionment),
         total_catch_weight(other.total_catch_weight),
         total_catch_numbers(other.total_catch_numbers),
         mortality_F(other.mortality_F),
+        mortality_F_by_partition(other.mortality_F_by_partition),
         mortality_M(other.mortality_M),
+        mortality_M_by_partition(other.mortality_M_by_partition),
         mortality_Z(other.mortality_Z),
+        mortality_Z_by_partition(other.mortality_Z_by_partition),
         numbers_at_age(other.numbers_at_age),
+        numbers_at_age_by_partition(other.numbers_at_age_by_partition),
         unfished_numbers_at_age(other.unfished_numbers_at_age),
         biomass(other.biomass),
         spawning_biomass(other.spawning_biomass),
         unfished_biomass(other.unfished_biomass),
         unfished_spawning_biomass(other.unfished_spawning_biomass),
         proportion_mature_at_age(other.proportion_mature_at_age),
+        proportion_mature_at_age_by_partition(
+            other.proportion_mature_at_age_by_partition),
+        proportion_female_at_age_year(other.proportion_female_at_age_year),
         expected_recruitment(other.expected_recruitment),
         sum_selectivity(other.sum_selectivity) {}
 
@@ -396,6 +462,63 @@ class PopulationInterface : public PopulationInterfaceBase {
     }
     out.attr("names") = names;
     return out;
+  }
+
+  /**
+   * @brief Sets the sex-structure model for the population.
+   * @param name One of "sex_ratio_at_age" or "explicit_two_sex".
+   */
+  void SetSexStructure(const std::string &name) {
+    this->sex_structure.set(
+        fims_popdy::SexStructureToString(
+            fims_popdy::SexStructureFromString(name)));
+  }
+
+  /**
+   * @brief Gets the sex-structure model for the population.
+   * @return The sex-structure name.
+   */
+  std::string GetSexStructure() const { return this->sex_structure.get(); }
+
+  /**
+   * @brief Set init apportionment weights from an R numeric vector.
+   *
+   * @details NULL or length-0 clears to empty (sex default at model build).
+   * Non-empty vectors are validated against the default sex partition
+   * (length 2, non-negative, sum to 1). Multi-axis validation is deferred
+   * to model Initialize when partition_spec is known.
+   *
+   * @param weights Numeric vector of length n_strata, or NULL/empty.
+   */
+  void SetInitApportionment(Rcpp::Nullable<Rcpp::NumericVector> weights) {
+    this->SetApportionmentVector(this->init_apportionment, weights,
+                                 "SetInitApportionment");
+  }
+
+  /**
+   * @brief Get init apportionment weights (empty numeric if unset).
+   */
+  Rcpp::NumericVector GetInitApportionment() const {
+    return Rcpp::wrap(*this->init_apportionment);
+  }
+
+  /**
+   * @brief Set recruit apportionment weights from an R numeric vector.
+   *
+   * @details Same rules as SetInitApportionment().
+   *
+   * @param weights Numeric vector of length n_strata, or NULL/empty.
+   */
+  void SetRecruitApportionment(Rcpp::Nullable<Rcpp::NumericVector> weights) {
+    this->SetApportionmentVector(this->recruit_apportionment, weights,
+                                 "SetRecruitApportionment");
+  }
+
+  /**
+   * @brief Get recruit apportionment weights (empty numeric if unset).
+   */
+  Rcpp::NumericVector GetRecruitApportionment() const {
+    return Rcpp::wrap(*this->recruit_apportionment);
   }
 
   /**
@@ -667,6 +790,15 @@ class PopulationInterface : public PopulationInterfaceBase {
     // before CatchAtAge::Initialize(), which must not overwrite this.
     population->partition_demand = *this->partition_demand;
 
+    population->sex_structure =
+        fims_popdy::SexStructureFromString(this->sex_structure.get());
+
+    population->init_apportionment.assign(this->init_apportionment->begin(),
+                                          this->init_apportionment->end());
+    population->recruit_apportionment.assign(
+        this->recruit_apportionment->begin(),
+        this->recruit_apportionment->end());
+
     for (size_t i = 0; i < ages.size(); i++) {
       population->ages[i] = this->ages[i];
     }
@@ -689,6 +821,36 @@ class PopulationInterface : public PopulationInterfaceBase {
   }
 
 #endif
+
+ private:
+  /**
+   * @brief Validate and assign a stratum entry-weight vector.
+   *
+   * @details NULL or empty clears @p target (C++ ResolveStratumEntryWeights
+   * sex default). Non-empty input is validated against the default sex
+   * partition via fims_popdy::ValidateStratumEntryWeights.
+   */
+  void SetApportionmentVector(
+      std::shared_ptr<std::vector<double> > target,
+      Rcpp::Nullable<Rcpp::NumericVector> values, const std::string& name) {
+    if (values.isNull()) {
+      target->clear();
+      return;
+    }
+    Rcpp::NumericVector vec(values.get());
+    if (vec.size() == 0) {
+      target->clear();
+      return;
+    }
+    std::vector<double> weights(vec.begin(), vec.end());
+    try {
+      fims_popdy::ValidateStratumEntryWeights(
+          fims_popdy::MakeDefaultSexPartitionSpec(), weights);
+    } catch (const std::invalid_argument& e) {
+      Rcpp::stop("%s: %s", name.c_str(), e.what());
+    }
+    *target = std::move(weights);
+  }
 };
 
 #endif

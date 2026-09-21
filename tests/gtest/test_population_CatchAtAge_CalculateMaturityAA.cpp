@@ -33,4 +33,34 @@ TEST_F(CAAEvaluateTestFixture,
   auto& dq = catch_at_age_model->GetPopulationDerivedQuantities(pop_id);
   EXPECT_NEAR(dq["proportion_mature_at_age"][10], expect_maturity[10], 0.0001);
 }
+
+TEST_F(CAAEvaluateTestFixture,
+       ExplicitTwoSexMaturityAASetsMaleToZero) {
+  population->sex_structure = fims_popdy::SexStructure::kExplicitTwoSex;
+  this->InitializeCAA();
+  catch_at_age_model->Initialize();
+
+  size_t pop_id = population->GetId();
+  auto& dq = catch_at_age_model->GetPopulationDerivedQuantities(pop_id);
+  ASSERT_NE(dq.find("proportion_mature_at_age_by_partition"), dq.end());
+
+  const size_t maturity_plane =
+      static_cast<size_t>((population->n_years + 1) * population->n_ages);
+  const int year = 2;
+  const int age = 6;
+  const int i_age_year = year * population->n_ages + age;
+
+  catch_at_age_model->CalculateMaturityAA(population, i_age_year, age);
+
+  const double pooled = dq["proportion_mature_at_age"][i_age_year];
+  EXPECT_GT(pooled, 0.0);
+  EXPECT_DOUBLE_EQ(
+      dq["proportion_mature_at_age_by_partition"][0 * maturity_plane +
+                                                 i_age_year],
+      pooled);
+  EXPECT_DOUBLE_EQ(
+      dq["proportion_mature_at_age_by_partition"][1 * maturity_plane +
+                                                 i_age_year],
+      0.0);
+}
 }  // namespace

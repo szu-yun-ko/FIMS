@@ -77,4 +77,89 @@ TEST_F(CAAEvaluateTestFixture,
   // testing that population numbers_at_age > 0.0
   EXPECT_GT(dq["numbers_at_age"][r_i_age_year], 0.0);
 }
+
+TEST_F(CAAEvaluateTestFixture,
+       ExplicitTwoSexRecruitmentPlacesRecruitsOntoStrata) {
+  population->sex_structure = fims_popdy::SexStructure::kExplicitTwoSex;
+  this->InitializeCAA();
+  catch_at_age_model->Initialize();
+  catch_at_age_model->Prepare();
+
+  size_t pop_id = population->GetId();
+  auto& dq = catch_at_age_model->GetPopulationDerivedQuantities(pop_id);
+  ASSERT_NE(dq.find("numbers_at_age_by_partition"), dq.end());
+
+  for (int age = 0; age < population->n_ages; age++) {
+    catch_at_age_model->CalculateMaturityAA(population, age, age);
+  }
+
+  const int r_year = 5;
+  const int r_age = 0;
+  const int r_i_age_year = r_year * population->n_ages + r_age;
+  const size_t naa_plane =
+      static_cast<size_t>((population->n_years + 1) * population->n_ages);
+  dq["spawning_biomass"][r_year - 1] = 1000.0;
+  population->recruit_apportionment = {0.3, 0.7};
+  population->proportion_female[0] = 0.9;
+
+  catch_at_age_model->CalculateRecruitment(population, r_i_age_year, r_year,
+                                           r_year);
+
+  const double recruits = dq["expected_recruitment"][r_year];
+  EXPECT_GT(recruits, 0.0);
+  EXPECT_DOUBLE_EQ(
+      dq["numbers_at_age_by_partition"][0 * naa_plane + r_i_age_year],
+      0.3 * recruits);
+  EXPECT_DOUBLE_EQ(
+      dq["numbers_at_age_by_partition"][1 * naa_plane + r_i_age_year],
+      0.7 * recruits);
+  EXPECT_DOUBLE_EQ(dq["numbers_at_age"][r_i_age_year], recruits);
+}
+
+TEST_F(CAAEvaluateTestFixture,
+       ExplicitTwoSexRecruitWeightsChangeSexMixNotSpawningBiomass) {
+  population->sex_structure = fims_popdy::SexStructure::kExplicitTwoSex;
+  this->InitializeCAA();
+  catch_at_age_model->Initialize();
+  catch_at_age_model->Prepare();
+
+  size_t pop_id = population->GetId();
+  auto& dq = catch_at_age_model->GetPopulationDerivedQuantities(pop_id);
+  const size_t naa_plane =
+      static_cast<size_t>((population->n_years + 1) * population->n_ages);
+
+  for (int age = 0; age < population->n_ages; age++) {
+    catch_at_age_model->CalculateMaturityAA(population, age, age);
+  }
+
+  const int sb_year = 4;
+  const int sb_age = 6;
+  const int sb_i_age_year = sb_year * population->n_ages + sb_age;
+  dq["numbers_at_age_by_partition"][0 * naa_plane + sb_i_age_year] = 800.0;
+  dq["numbers_at_age_by_partition"][1 * naa_plane + sb_i_age_year] = 1200.0;
+  catch_at_age_model->CalculateMaturityAA(population, sb_i_age_year, sb_age);
+  dq["spawning_biomass"][sb_year] = 0.0;
+  catch_at_age_model->CalculateSpawningBiomass(population, sb_i_age_year,
+                                               sb_year, sb_age);
+  const double sb_before = dq["spawning_biomass"][sb_year];
+  EXPECT_GT(sb_before, 0.0);
+
+  const int r_year = 5;
+  const int r_i_age_year = r_year * population->n_ages;
+  dq["spawning_biomass"][r_year - 1] = sb_before;
+  population->recruit_apportionment = {0.2, 0.8};
+  catch_at_age_model->CalculateRecruitment(population, r_i_age_year, r_year,
+                                           r_year);
+
+  dq["spawning_biomass"][sb_year] = 0.0;
+  catch_at_age_model->CalculateSpawningBiomass(population, sb_i_age_year,
+                                               sb_year, sb_age);
+  EXPECT_DOUBLE_EQ(dq["spawning_biomass"][sb_year], sb_before);
+  EXPECT_DOUBLE_EQ(
+      dq["numbers_at_age_by_partition"][0 * naa_plane + r_i_age_year],
+      0.2 * dq["expected_recruitment"][r_year]);
+  EXPECT_DOUBLE_EQ(
+      dq["numbers_at_age_by_partition"][1 * naa_plane + r_i_age_year],
+      0.8 * dq["expected_recruitment"][r_year]);
+}
 }  // namespace

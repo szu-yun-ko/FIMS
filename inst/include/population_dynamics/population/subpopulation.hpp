@@ -16,6 +16,53 @@
 namespace fims_popdy {
 
 /**
+ * @brief Sex-structure model used for population dynamics.
+ *
+ * @details Orthogonal to PartitionDemand, which only chooses which output
+ * planes to fill. Model 1 (`sex_ratio_at_age`) keeps pooled dynamics and
+ * splits on write. Model 3 (`explicit_two_sex`) uses per-sex dynamics.
+ * `implicit_two_sex` is not implemented yet and is rejected by the parser.
+ */
+enum class SexStructure {
+  kSexRatioAtAge, /*!< Model 1: pooled calc + split-on-write */
+  kExplicitTwoSex /*!< Model 3: per-sex dynamics */
+};
+
+/** @brief Default sex structure (Model 1). */
+inline constexpr SexStructure kDefaultSexStructure =
+    SexStructure::kSexRatioAtAge;
+
+/**
+ * @brief Convert a SexStructure value to its user-facing name.
+ */
+inline const char *SexStructureToString(SexStructure value) {
+  switch (value) {
+    case SexStructure::kSexRatioAtAge:
+      return "sex_ratio_at_age";
+    case SexStructure::kExplicitTwoSex:
+      return "explicit_two_sex";
+  }
+  throw std::invalid_argument("SexStructureToString: unhandled SexStructure");
+}
+
+/**
+ * @brief Parse a user-facing sex_structure name.
+ *
+ * @param name One of "sex_ratio_at_age" or "explicit_two_sex".
+ */
+inline SexStructure SexStructureFromString(const std::string &name) {
+  if (name == "sex_ratio_at_age") {
+    return SexStructure::kSexRatioAtAge;
+  }
+  if (name == "explicit_two_sex") {
+    return SexStructure::kExplicitTwoSex;
+  }
+  throw std::invalid_argument(
+      "SexStructureFromString: unknown sex_structure \"" + name +
+      "\". Allowed values: \"sex_ratio_at_age\", \"explicit_two_sex\".");
+}
+
+/**
  * @brief One partition axis (e.g. sex with levels female and male).
  */
 struct Axis {
@@ -532,6 +579,88 @@ std::vector<Type> SexStratumSplitFactors(const PartitionSpec &spec,
         "(one sex axis with female and male)");
   }
   return {proportion_female, static_cast<Type>(1.0) - proportion_female};
+}
+
+/**
+ * @brief Validate per-stratum entry weights (init or recruit apportionment).
+ *
+ * @details Weights must have length n_strata(), each entry >= 0, and sum to 1
+ * within tolerance. Used for explicit partitioned dynamics when placing
+ * initial numbers or recruits onto strata; separate from fleet sampling
+ * weights and from maturity-based reproductive contribution.
+ *
+ * @param spec Partition structure defining n_strata().
+ * @param weights One weight per stratum.
+ * @param tolerance Absolute tolerance for |sum(weights) - 1|.
+ */
+template <typename Type>
+void ValidateStratumEntryWeights(
+    const PartitionSpec &spec, const std::vector<Type> &weights,
+    Type tolerance = static_cast<Type>(1e-6)) {
+  if (weights.size() != spec.n_strata()) {
+    throw std::invalid_argument(
+        "ValidateStratumEntryWeights: weights size " +
+        std::to_string(weights.size()) + " does not match n_strata " +
+        std::to_string(spec.n_strata()));
+  }
+  Type sum = static_cast<Type>(0);
+  for (size_t i = 0; i < weights.size(); ++i) {
+    if (weights[i] < static_cast<Type>(0)) {
+      throw std::invalid_argument(
+          "ValidateStratumEntryWeights: weight at stratum " +
+          std::to_string(i) + " is negative");
+    }
+    sum += weights[i];
+  }
+  const Type deviation = sum - static_cast<Type>(1);
+  if (deviation > tolerance || deviation < -tolerance) {
+    throw std::invalid_argument(
+        "ValidateStratumEntryWeights: weights must sum to 1 within "
+        "tolerance");
+  }
+}
+
+/**
+ * @brief Sex-default entry weights from proportion_female.
+ *
+ * @details Same numeric result as SexStratumSplitFactors(), named for the
+ * init/recruit apportionment use case. Female stratum (0) gets
+ * proportion_female; male stratum (1) gets (1 - proportion_female). Validates
+ * the returned vector. For non-sex partitions, callers supply and validate
+ * their own length-n_strata weights.
+ *
+ * @param spec Sex-only partition (see MakeDefaultSexPartitionSpec()).
+ * @param proportion_female Female share at entry; in [0, 1].
+ */
+template <typename Type>
+std::vector<Type> MakeSexStratumEntryWeights(const PartitionSpec &spec,
+                                             Type proportion_female) {
+  std::vector<Type> weights =
+      SexStratumSplitFactors(spec, proportion_female);
+  ValidateStratumEntryWeights(spec, weights);
+  return weights;
+}
+
+/**
+ * @brief Resolve entry weights: user vector if non-empty, else sex default.
+ *
+ * @details Empty user_weights falls back to MakeSexStratumEntryWeights.
+ * Non-empty vectors are validated against spec. Used for both init and
+ * recruit apportionment in explicit partitioned dynamics.
+ *
+ * @param spec Partition structure.
+ * @param user_weights Empty for default, or length n_strata().
+ * @param proportion_female Sex-default female share when user_weights empty.
+ */
+template <typename Type>
+std::vector<Type> ResolveStratumEntryWeights(
+    const PartitionSpec &spec, const std::vector<Type> &user_weights,
+    Type proportion_female) {
+  if (user_weights.empty()) {
+    return MakeSexStratumEntryWeights(spec, proportion_female);
+  }
+  ValidateStratumEntryWeights(spec, user_weights);
+  return user_weights;
 }
 
 /**
