@@ -963,6 +963,14 @@ class CatchAtAge : public FisheryModelBase<Type> {
    * Where \f$f()\f$ evaluates mean recruitment based on spawning biomass and
    * \f$\phi_0\f$, and \f$g(y-1)\f$ evaluates recruitment deviations.
    *
+   * @details In explicit two-sex mode, the same \f$R_y\f$ is placed onto
+   * strata with recruit_apportionment (sex default from proportion_female):
+   * \f[
+   * N_{0,y}^{s} = w^{\mathrm{rec}}_{s}\, R_y, \quad
+   * N_{0,y} = \sum_s N_{0,y}^{s}.
+   * \f]
+   * Model 1 leaves numbers_at_age_by_partition untouched.
+   *
    * @snippet{doc} this param_population
    * @snippet{doc} this param_i_age_year
    * @snippet{doc} this param_year
@@ -995,6 +1003,45 @@ class CatchAtAge : public FisheryModelBase<Type> {
     }
 
     dq_["expected_recruitment"][year] = dq_["numbers_at_age"][i_age_year];
+
+    if (population->sex_structure !=
+        fims_popdy::SexStructure::kExplicitTwoSex) {
+      return;
+    }
+
+    auto naa_it = dq_.find("numbers_at_age_by_partition");
+    if (naa_it == dq_.end()) {
+      throw std::invalid_argument(
+          "CatchAtAge::CalculateRecruitment explicit_two_sex missing "
+          "numbers_at_age_by_partition derived quantity.");
+    }
+
+    Type proportion_female = static_cast<Type>(0.5);
+    if (population->proportion_female.size() > 0) {
+      proportion_female = population->proportion_female[0];
+    }
+    const std::vector<Type> weights = fims_popdy::ResolveStratumEntryWeights(
+        population->partition_spec, population->recruit_apportionment,
+        proportion_female);
+
+    const size_t n_strata = population->partition_spec.n_strata();
+    const size_t naa_plane =
+        (population->n_years + 1) * population->n_ages;
+    if (naa_it->second.size() != n_strata * naa_plane ||
+        weights.size() != n_strata) {
+      throw std::invalid_argument(
+          "CatchAtAge::CalculateRecruitment explicit_two_sex found invalid "
+          "numbers_at_age_by_partition or recruit-weight size.");
+    }
+
+    const Type recruits = dq_["numbers_at_age"][i_age_year];
+    Type pooled = static_cast<Type>(0.0);
+    for (size_t stratum = 0; stratum < n_strata; ++stratum) {
+      const Type n_stratum = weights[stratum] * recruits;
+      naa_it->second[stratum * naa_plane + i_age_year] = n_stratum;
+      pooled += n_stratum;
+    }
+    dq_["numbers_at_age"][i_age_year] = pooled;
   }
 
   /**
