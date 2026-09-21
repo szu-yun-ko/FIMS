@@ -1045,6 +1045,83 @@ class CatchAtAge : public FisheryModelBase<Type> {
   }
 
   /**
+   * @brief Diagnostic female proportion from explicit numbers at age.
+   *
+   * \f[
+   * p_{\mathrm{female},a,y} = \frac{N^{\mathrm{fem}}_{a,y}}
+   * {N^{\mathrm{fem}}_{a,y}+N^{\mathrm{male}}_{a,y}}
+   * \f]
+   *
+   * @details Explicit two-sex only. Not used in spawning biomass. Zero when
+   * both sexes have zero numbers. No-op for Model 1 or years beyond n_years-1.
+   *
+   * @snippet{doc} this param_population
+   * @snippet{doc} this param_i_age_year
+   * @snippet{doc} this param_year
+   * @snippet{doc} this param_age
+   */
+  void CalculateProportionFemaleAtAgeYear(
+      std::shared_ptr<fims_popdy::Population<Type>> &population,
+      size_t i_age_year, size_t year, size_t age) {
+    if (population->sex_structure !=
+            fims_popdy::SexStructure::kExplicitTwoSex ||
+        year >= population->n_years) {
+      return;
+    }
+    std::map<std::string, fims::Vector<Type>> &dq_ =
+        this->GetPopulationDerivedQuantities(population->GetId());
+    auto naa_it = dq_.find("numbers_at_age_by_partition");
+    auto p_it = dq_.find("proportion_female_at_age_year");
+    if (naa_it == dq_.end() || p_it == dq_.end()) {
+      throw std::invalid_argument(
+          "CatchAtAge::CalculateProportionFemaleAtAgeYear explicit_two_sex "
+          "missing numbers_at_age_by_partition or "
+          "proportion_female_at_age_year.");
+    }
+
+    const size_t n_strata = population->partition_spec.n_strata();
+    const size_t naa_plane =
+        (population->n_years + 1) * population->n_ages;
+    if (naa_it->second.size() != n_strata * naa_plane ||
+        p_it->second.size() !=
+            population->n_ages * population->n_years) {
+      throw std::invalid_argument(
+          "CatchAtAge::CalculateProportionFemaleAtAgeYear explicit_two_sex "
+          "found invalid derived-quantity size.");
+    }
+
+    Type n_female = static_cast<Type>(0.0);
+    Type n_male = static_cast<Type>(0.0);
+    bool found_female = false;
+    bool found_male = false;
+    if (population->partition_spec.axes.size() == 1 &&
+        population->partition_spec.axes[0].name == "sex") {
+      for (size_t stratum = 0; stratum < n_strata; ++stratum) {
+        const Type n_stratum =
+            naa_it->second[stratum * naa_plane + i_age_year];
+        if (stratum < population->partition_spec.axes[0].levels.size() &&
+            population->partition_spec.axes[0].levels[stratum] == "female") {
+          n_female = n_stratum;
+          found_female = true;
+        } else if (stratum <
+                       population->partition_spec.axes[0].levels.size() &&
+                   population->partition_spec.axes[0].levels[stratum] ==
+                       "male") {
+          n_male = n_stratum;
+          found_male = true;
+        }
+      }
+    }
+    if (!found_female || !found_male) {
+      return;
+    }
+    const Type denom = n_female + n_male;
+    p_it->second[i_age_year] =
+        (denom > static_cast<Type>(0.0)) ? (n_female / denom)
+                                         : static_cast<Type>(0.0);
+  }
+
+  /**
    * @brief Calculates maturity at age, in proportion, for a population.
    *
    * This function evaluates the maturity ogive at the specified age to estimate
@@ -1964,6 +2041,10 @@ class CatchAtAge : public FisheryModelBase<Type> {
               CalculateUnfishedNumbersAA(population, i_age_year, i_agem1_yearm1,
                                          a);
             }
+          }
+
+          if (y < population->n_years) {
+            CalculateProportionFemaleAtAgeYear(population, i_age_year, y, a);
           }
 
           /*

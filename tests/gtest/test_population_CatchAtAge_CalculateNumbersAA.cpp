@@ -162,4 +162,37 @@ TEST_F(CAAEvaluateTestFixture,
   EXPECT_NE(female_curr, male_curr);
   EXPECT_DOUBLE_EQ(dq["numbers_at_age"][i_curr], female_curr + male_curr);
 }
+
+TEST_F(CAAEvaluateTestFixture,
+       ExplicitTwoSexProportionFemaleAtAgeYearFromNumbers) {
+  population->sex_structure = fims_popdy::SexStructure::kExplicitTwoSex;
+  this->InitializeCAA();
+  catch_at_age_model->Initialize();
+
+  size_t pop_id = population->GetId();
+  auto& dq = catch_at_age_model->GetPopulationDerivedQuantities(pop_id);
+  ASSERT_NE(dq.find("proportion_female_at_age_year"), dq.end());
+
+  const size_t naa_plane =
+      static_cast<size_t>((population->n_years + 1) * population->n_ages);
+  const int year = 4;
+  const int age = 6;
+  const int i_age_year = year * population->n_ages + age;
+  dq["numbers_at_age_by_partition"][0 * naa_plane + i_age_year] = 800.0;
+  dq["numbers_at_age_by_partition"][1 * naa_plane + i_age_year] = 200.0;
+
+  catch_at_age_model->CalculateProportionFemaleAtAgeYear(population, i_age_year,
+                                                         year, age);
+  EXPECT_DOUBLE_EQ(dq["proportion_female_at_age_year"][i_age_year], 0.8);
+
+  dq["spawning_biomass"][year] = 0.0;
+  catch_at_age_model->CalculateMaturityAA(population, i_age_year, age);
+  catch_at_age_model->CalculateSpawningBiomass(population, i_age_year, year,
+                                               age);
+  const double sb_from_n =
+      800.0 *
+      dq["proportion_mature_at_age_by_partition"][0 * naa_plane + i_age_year] *
+      population->growth->evaluate(year, population->ages[age]);
+  EXPECT_DOUBLE_EQ(dq["spawning_biomass"][year], sb_from_n);
+}
 }  // namespace
