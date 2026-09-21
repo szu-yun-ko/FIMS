@@ -1133,8 +1133,9 @@ class CatchAtAge : public FisheryModelBase<Type> {
    * @details In explicit two-sex mode, also fills
    * proportion_mature_at_age_by_partition with the sex-default policy: shared
    * ogive on the female stratum, 0 on male (reproductive contribution is
-   * carried by maturity). Hook for later per-stratum maturity modules; does
-   * not yet change CalculateSpawningBiomass.
+   * carried by maturity). Hook for later per-stratum maturity modules.
+   * CalculateSpawningBiomass (and unfished SB / phi0) consume these
+   * per-stratum values in explicit mode.
    *
    * @snippet{doc} this param_population
    * @snippet{doc} this param_i_age_year
