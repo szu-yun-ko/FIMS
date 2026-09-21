@@ -93,4 +93,58 @@ TEST_F(CAAEvaluateTestFixture, FemaleDemandWritesIndexByPartition) {
                      0.0);
   }
 }
+
+TEST_F(CAAEvaluateTestFixture,
+       ExplicitTwoSexIndexNumbersAAUsesNumbersByPartition) {
+  population->sex_structure = fims_popdy::SexStructure::kExplicitTwoSex;
+  this->InitializeCAA();
+  catch_at_age_model->Initialize();
+  catch_at_age_model->Prepare();
+  population->partition_demand =
+      fims_popdy::MakeSexPartitionDemand({"female", "male"});
+
+  size_t pop_id = population->GetId();
+  auto& dq_pop = catch_at_age_model->GetPopulationDerivedQuantities(pop_id);
+  const size_t naa_plane =
+      static_cast<size_t>((population->n_years + 1) * population->n_ages);
+  const double n_female = 800.0;
+  const double n_male = 200.0;
+  dq_pop["numbers_at_age_by_partition"][0 * naa_plane + i_age_year] = n_female;
+  dq_pop["numbers_at_age_by_partition"][1 * naa_plane + i_age_year] = n_male;
+  population->proportion_female[age] = 0.9;
+
+  catch_at_age_model->CalculateIndexNumbersAA(population, i_age_year, year,
+                                              age);
+  catch_at_age_model->CalculateIndexWeightAA(population, year, age);
+
+  for (size_t fleet_ = 0; fleet_ < population->n_fleets; fleet_++) {
+    uint32_t fleet_id = population->fleets[fleet_]->GetId();
+    auto& dq_fleet = catch_at_age_model->GetFleetDerivedQuantities(fleet_id);
+    const size_t female_idx =
+        population->index_layout.i_stratum_age_year(0, year, age);
+    const size_t male_idx =
+        population->index_layout.i_stratum_age_year(1, year, age);
+    const double s = population->fleets[fleet_]
+                         ->GetSelectivityForStratum(0)
+                         ->evaluate(population->ages[age], year);
+    const double q = population->fleets[fleet_]->q.get_force_scalar(year);
+    const double index_female = q * s * n_female;
+    const double index_male = q * s * n_male;
+    const double w =
+        population->growth->evaluate(year, population->ages[age]);
+
+    EXPECT_NEAR(dq_fleet["index_numbers_at_age_by_partition"][female_idx],
+                index_female, 1e-8);
+    EXPECT_NEAR(dq_fleet["index_numbers_at_age_by_partition"][male_idx],
+                index_male, 1e-8);
+    EXPECT_NEAR(dq_fleet["index_numbers_at_age"][i_age_year],
+                index_female + index_male, 1e-8);
+    EXPECT_NEAR(dq_fleet["index_weight_at_age_by_partition"][female_idx],
+                index_female * w, 1e-8);
+    EXPECT_NEAR(dq_fleet["index_weight_at_age_by_partition"][male_idx],
+                index_male * w, 1e-8);
+    EXPECT_NE(dq_fleet["index_numbers_at_age_by_partition"][female_idx],
+              dq_fleet["index_numbers_at_age"][i_age_year] * 0.9);
+  }
+}
 }  // namespace

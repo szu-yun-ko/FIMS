@@ -1268,7 +1268,19 @@ class CatchAtAge : public FisheryModelBase<Type> {
       Type catch_waa =
           fdq_["catch_numbers_at_age"][i_age_year] * mean_weight_at_age;
       fdq_["catch_weight_at_age"][i_age_year] = catch_waa;
-      if (!population->partition_demand.is_pooled()) {
+      if (population->sex_structure ==
+              fims_popdy::SexStructure::kExplicitTwoSex &&
+          !population->partition_demand.is_pooled()) {
+        const std::vector<size_t> requested = fims_popdy::RequestedStrata(
+            population->partition_spec, population->partition_demand);
+        for (size_t stratum : requested) {
+          const size_t idx = population->index_layout.i_stratum_age_year(
+              stratum, year, age);
+          fdq_["catch_weight_at_age_by_partition"][idx] =
+              fdq_["catch_numbers_at_age_by_partition"][idx] *
+              mean_weight_at_age;
+        }
+      } else if (!population->partition_demand.is_pooled()) {
         fims_popdy::WritePartitionedQuantityAtAge(
             fdq_["catch_weight_at_age_by_partition"], catch_waa,
             population->partition_spec, population->index_layout,
@@ -1289,6 +1301,12 @@ class CatchAtAge : public FisheryModelBase<Type> {
    * \left( 1 - \exp(-Z_{a,y}) \right)
    * \f]
    *
+   * @details Model 1 (`sex_ratio_at_age`) uses the pooled formula and
+   * split-on-write. In explicit two-sex mode, Baranov is applied per
+   * stratum with \f$F^s\f$, \f$Z^s\f$, and \f$N^s\f$; pooled catch is the
+   * sum of stratum catch. If \f$Z\f$ differs by sex, that sum is not equal
+   * to pooled Baranov of \f$\sum_s N^s\f$.
+   *
    * @snippet{doc} this param_population
    * @snippet{doc} this param_i_age_year
    * @snippet{doc} this param_year
@@ -1299,6 +1317,61 @@ class CatchAtAge : public FisheryModelBase<Type> {
       size_t i_age_year, size_t year, size_t age) {
     std::map<std::string, fims::Vector<Type>> &pdq_ =
         this->GetPopulationDerivedQuantities(population->GetId());
+
+    if (population->sex_structure ==
+        fims_popdy::SexStructure::kExplicitTwoSex) {
+      auto naa_it = pdq_.find("numbers_at_age_by_partition");
+      auto z_it = pdq_.find("mortality_Z_by_partition");
+      if (naa_it == pdq_.end() || z_it == pdq_.end()) {
+        throw std::invalid_argument(
+            "CatchAtAge::CalculateCatchNumbersAA explicit_two_sex missing "
+            "numbers_at_age_by_partition or mortality_Z_by_partition.");
+      }
+      const size_t n_strata = population->partition_spec.n_strata();
+      const size_t mortality_plane = population->n_years * population->n_ages;
+      const size_t naa_plane =
+          (population->n_years + 1) * population->n_ages;
+      if (naa_it->second.size() != n_strata * naa_plane ||
+          z_it->second.size() != n_strata * mortality_plane) {
+        throw std::invalid_argument(
+            "CatchAtAge::CalculateCatchNumbersAA explicit_two_sex found "
+            "invalid partitioned NAA or Z size.");
+      }
+      const std::vector<size_t> requested = fims_popdy::RequestedStrata(
+          population->partition_spec, population->partition_demand);
+
+      for (size_t fleet_ = 0; fleet_ < population->n_fleets; fleet_++) {
+        std::map<std::string, fims::Vector<Type>> &fdq_ =
+            this->GetFleetDerivedQuantities(
+                population->fleets[fleet_]->GetId());
+        Type catch_pooled = static_cast<Type>(0.0);
+        for (size_t stratum = 0; stratum < n_strata; ++stratum) {
+          const Type selectivity =
+              population->fleets[fleet_]
+                  ->GetSelectivityForStratum(stratum)
+                  ->evaluate(population->ages[age], year);
+          const Type f_stratum = population->fleets[fleet_]->Fmort[year] *
+                                 population->f_multiplier[year] * selectivity;
+          const Type z_stratum =
+              z_it->second[stratum * mortality_plane + i_age_year];
+          const Type n_stratum =
+              naa_it->second[stratum * naa_plane + i_age_year];
+          const Type catch_stratum =
+              (f_stratum / z_stratum) * n_stratum *
+              (static_cast<Type>(1.0) - fims_math::exp(-z_stratum));
+          catch_pooled += catch_stratum;
+          if (std::find(requested.begin(), requested.end(), stratum) !=
+              requested.end()) {
+            const size_t idx =
+                population->index_layout.i_stratum_age_year(stratum, year, age);
+            fdq_["catch_numbers_at_age_by_partition"][idx] += catch_stratum;
+          }
+        }
+        fdq_["catch_numbers_at_age"][i_age_year] += catch_pooled;
+      }
+      return;
+    }
+
     const std::vector<Type> split_factors =
         population->partition_demand.is_pooled()
             ? std::vector<Type>{}
@@ -1366,6 +1439,10 @@ class CatchAtAge : public FisheryModelBase<Type> {
    * IN_{f,a,y} \mathrel{+}= q_{f,y} \times S_f(a) \times N_{a,y}
    * \f]
    *
+   * @details Model 1 uses the pooled formula and split-on-write. In
+   * explicit two-sex mode, the index is \f$q\,S^s N^s\f$ per stratum;
+   * pooled index is the sum of stratum index.
+   *
    * When timing is accounted for within FIMS the equation will include the
    * fraction of the year when the survey was conducted \f$t_y\f$:
    * \f[ IN_{f,a,y} \mathrel{+}= S_{f,y}(a) \times N_{a,y} \times
@@ -1381,6 +1458,53 @@ class CatchAtAge : public FisheryModelBase<Type> {
       size_t i_age_year, size_t year, size_t age) {
     std::map<std::string, fims::Vector<Type>> &pdq_ =
         this->GetPopulationDerivedQuantities(population->GetId());
+
+    if (population->sex_structure ==
+        fims_popdy::SexStructure::kExplicitTwoSex) {
+      auto naa_it = pdq_.find("numbers_at_age_by_partition");
+      if (naa_it == pdq_.end()) {
+        throw std::invalid_argument(
+            "CatchAtAge::CalculateIndexNumbersAA explicit_two_sex missing "
+            "numbers_at_age_by_partition.");
+      }
+      const size_t n_strata = population->partition_spec.n_strata();
+      const size_t naa_plane =
+          (population->n_years + 1) * population->n_ages;
+      if (naa_it->second.size() != n_strata * naa_plane) {
+        throw std::invalid_argument(
+            "CatchAtAge::CalculateIndexNumbersAA explicit_two_sex found "
+            "invalid numbers_at_age_by_partition size.");
+      }
+      const std::vector<size_t> requested = fims_popdy::RequestedStrata(
+          population->partition_spec, population->partition_demand);
+
+      for (size_t fleet_ = 0; fleet_ < population->n_fleets; fleet_++) {
+        std::map<std::string, fims::Vector<Type>> &fdq_ =
+            this->GetFleetDerivedQuantities(
+                population->fleets[fleet_]->GetId());
+        Type index_pooled = static_cast<Type>(0.0);
+        for (size_t stratum = 0; stratum < n_strata; ++stratum) {
+          const Type selectivity =
+              population->fleets[fleet_]
+                  ->GetSelectivityForStratum(stratum)
+                  ->evaluate(population->ages[age], year);
+          const Type index_stratum =
+              population->fleets[fleet_]->q.get_force_scalar(year) *
+              selectivity *
+              naa_it->second[stratum * naa_plane + i_age_year];
+          index_pooled += index_stratum;
+          if (std::find(requested.begin(), requested.end(), stratum) !=
+              requested.end()) {
+            const size_t idx =
+                population->index_layout.i_stratum_age_year(stratum, year, age);
+            fdq_["index_numbers_at_age_by_partition"][idx] += index_stratum;
+          }
+        }
+        fdq_["index_numbers_at_age"][i_age_year] += index_pooled;
+      }
+      return;
+    }
+
     const std::vector<Type> split_factors =
         population->partition_demand.is_pooled()
             ? std::vector<Type>{}
@@ -1452,7 +1576,19 @@ class CatchAtAge : public FisheryModelBase<Type> {
       Type index_waa =
           fdq_["index_numbers_at_age"][i_age_year] * mean_weight_at_age;
       fdq_["index_weight_at_age"][i_age_year] = index_waa;
-      if (!population->partition_demand.is_pooled()) {
+      if (population->sex_structure ==
+              fims_popdy::SexStructure::kExplicitTwoSex &&
+          !population->partition_demand.is_pooled()) {
+        const std::vector<size_t> requested = fims_popdy::RequestedStrata(
+            population->partition_spec, population->partition_demand);
+        for (size_t stratum : requested) {
+          const size_t idx = population->index_layout.i_stratum_age_year(
+              stratum, year, age);
+          fdq_["index_weight_at_age_by_partition"][idx] =
+              fdq_["index_numbers_at_age_by_partition"][idx] *
+              mean_weight_at_age;
+        }
+      } else if (!population->partition_demand.is_pooled()) {
         fims_popdy::WritePartitionedQuantityAtAge(
             fdq_["index_weight_at_age_by_partition"], index_waa,
             population->partition_spec, population->index_layout,
