@@ -125,9 +125,9 @@ TEST_F(CAAPrepareTestFixture,
   auto& dq = catch_at_age_model->GetPopulationDerivedQuantities(1);
   const size_t n_strata = fims_popdy::MakeDefaultSexPartitionSpec().n_strata();
 
-  for (size_t age = 0; age < static_cast<size_t>(n_ages); age++) {
-    for (size_t year = 0; year < static_cast<size_t>(n_years); year++) {
-      const size_t i_age_year = age * n_years + year;
+  for (size_t year = 0; year < static_cast<size_t>(n_years); year++) {
+    for (size_t age = 0; age < static_cast<size_t>(n_ages); age++) {
+      const size_t i_age_year = year * n_ages + age;
       const double expected_m = fims_math::exp(population->log_M[i_age_year]);
       for (size_t stratum = 0; stratum < n_strata; stratum++) {
         const size_t i_stratum_age_year =

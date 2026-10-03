@@ -254,22 +254,33 @@ class CatchAtAge : public FisheryModelBase<Type> {
               "CatchAtAge::Prepare explicit_two_sex requires log_M size "
               "n_years*n_ages or n_strata*n_years*n_ages.");
         }
-        for (size_t age = 0; age < population->n_ages; age++) {
-          for (size_t year = 0; year < population->n_years; year++) {
-            const size_t i_age_year = age * population->n_years + year;
+        // mortality_M_by_partition is read with IndexLayout (year, then age).
+        // Flat log_M stays 1:1 with M: each index is visited once.
+        if (population->index_layout.n_years != population->n_years ||
+            population->index_layout.n_ages != population->n_ages) {
+          population->index_layout.n_years = population->n_years;
+          population->index_layout.n_ages = population->n_ages;
+          population->index_layout.n_strata = n_strata;
+        }
+        for (size_t year = 0; year < population->n_years; year++) {
+          for (size_t age = 0; age < population->n_ages; age++) {
+            const size_t i_age_year =
+                population->index_layout.i_age_year(year, age);
             if (has_pooled_log_m) {
               const Type pooled_m = fims_math::exp(population->log_M[i_age_year]);
               population->M[i_age_year] = pooled_m;
               for (size_t stratum = 0; stratum < n_strata; stratum++) {
                 const size_t i_stratum_age_year =
-                    stratum * pooled_age_year_size + i_age_year;
+                    population->index_layout.i_stratum_age_year(stratum, year,
+                                                                age);
                 mortality_m_by_partition[i_stratum_age_year] = pooled_m;
               }
             } else {
               Type pooled_m = static_cast<Type>(0.0);
               for (size_t stratum = 0; stratum < n_strata; stratum++) {
                 const size_t i_stratum_age_year =
-                    stratum * pooled_age_year_size + i_age_year;
+                    population->index_layout.i_stratum_age_year(stratum, year,
+                                                                age);
                 const Type stratum_m =
                     fims_math::exp(population->log_M[i_stratum_age_year]);
                 mortality_m_by_partition[i_stratum_age_year] = stratum_m;
