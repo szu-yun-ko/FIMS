@@ -281,8 +281,9 @@ class PopulationInterface : public PopulationInterfaceBase {
   /**
    * @brief Female proportion at age and year (explicit two-sex only).
    *
-   * @details Size n_ages x n_years. Model 1 keeps scalar / age-only
-   * proportion_female; this DQ is allocated only for explicit_two_sex.
+   * @details Size n_years x n_ages, stored year-major like numbers_at_age.
+   * Model 1 keeps scalar / age-only proportion_female; this DQ is
+   * allocated only for explicit_two_sex.
    */
   VariableVector proportion_female_at_age_year;
   /**

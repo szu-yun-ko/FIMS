@@ -1257,9 +1257,9 @@ class CatchAtAgeInterface : public FisheryModelInterfaceBase {
         derived_quantities_dim_info["proportion_female_at_age_year"] =
             fims_popdy::DimensionInfo(
                 "proportion_female_at_age_year",
-                fims::Vector<int>{static_cast<int>(n_ages),
-                                  static_cast<int>(n_years)},
-                fims::Vector<std::string>{"n_ages", "n_years"});
+                fims::Vector<int>{static_cast<int>(n_years),
+                                  static_cast<int>(n_ages)},
+                fims::Vector<std::string>{"n_years", "n_ages"});
         info->variable_map
             [population_interface->proportion_female_at_age_year.id_m] =
             &derived_quantities["proportion_female_at_age_year"];
