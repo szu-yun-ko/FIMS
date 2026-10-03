@@ -630,23 +630,24 @@ void ValidateStratumEntryWeights(
  * their own length-n_strata weights.
  *
  * @param spec Sex-only partition (see MakeDefaultSexPartitionSpec()).
- * @param proportion_female Female share at entry; in [0, 1].
+ * @param proportion_female Female share at entry. Not range-checked here:
+ *        proportion_female may be estimated, and a numeric throw inside
+ *        Evaluate would branch on the tape. User-supplied init and recruit
+ *        weights are still checked in ResolveStratumEntryWeights.
  */
 template <typename Type>
 std::vector<Type> MakeSexStratumEntryWeights(const PartitionSpec &spec,
                                              Type proportion_female) {
-  std::vector<Type> weights =
-      SexStratumSplitFactors(spec, proportion_female);
-  ValidateStratumEntryWeights(spec, weights);
-  return weights;
+  return SexStratumSplitFactors(spec, proportion_female);
 }
 
 /**
  * @brief Resolve entry weights: user vector if non-empty, else sex default.
  *
- * @details Empty user_weights falls back to MakeSexStratumEntryWeights.
- * Non-empty vectors are validated against spec. Used for both init and
- * recruit apportionment in explicit partitioned dynamics.
+ * @details Empty user_weights falls back to MakeSexStratumEntryWeights
+ * without a numeric range check. Non-empty user vectors are validated
+ * against spec. Used for both init and recruit apportionment in explicit
+ * partitioned dynamics.
  *
  * @param spec Partition structure.
  * @param user_weights Empty for default, or length n_strata().
