@@ -83,6 +83,26 @@ annual fishing mortality multipliers to scale total mortality of all fleets*/
   IndexLayout index_layout;     /*!< folded indices for partitioned quantities */
   PartitionDemand partition_demand =
       MakePooledPartitionDemand(); /*!< which strata to materialize; empty = pooled */
+  SexStructure sex_structure =
+      kDefaultSexStructure; /*!< sex-structure model; orthogonal to partition_demand */
+
+  /**
+   * @brief Per-stratum weights for placing initial numbers (explicit mode).
+   *
+   * @details Empty means use the sex-default policy from proportion_female
+   * (MakeSexStratumEntryWeights). When non-empty, length must equal
+   * n_strata(), entries >= 0, and sum to 1. Separate from recruit
+   * apportionment and from maturity-based reproductive contribution.
+   */
+  std::vector<Type> init_apportionment;
+
+  /**
+   * @brief Per-stratum weights for placing recruits (explicit mode).
+   *
+   * @details Empty means use the sex-default policy from proportion_female.
+   * Same constraints as init_apportionment when non-empty.
+   */
+  std::vector<Type> recruit_apportionment;
 
   /**
    * @brief Constructor.

@@ -3,6 +3,38 @@
 
 namespace {
 
+TEST(SexStructure, DefaultIsSexRatioAtAge) {
+  EXPECT_EQ(fims_popdy::kDefaultSexStructure,
+            fims_popdy::SexStructure::kSexRatioAtAge);
+  EXPECT_STREQ(fims_popdy::SexStructureToString(
+                   fims_popdy::kDefaultSexStructure),
+               "sex_ratio_at_age");
+}
+
+TEST(SexStructure, RoundTripKnownNames) {
+  EXPECT_EQ(fims_popdy::SexStructureFromString("sex_ratio_at_age"),
+            fims_popdy::SexStructure::kSexRatioAtAge);
+  EXPECT_STREQ(fims_popdy::SexStructureToString(
+                   fims_popdy::SexStructure::kSexRatioAtAge),
+               "sex_ratio_at_age");
+
+  EXPECT_EQ(fims_popdy::SexStructureFromString("explicit_two_sex"),
+            fims_popdy::SexStructure::kExplicitTwoSex);
+  EXPECT_STREQ(fims_popdy::SexStructureToString(
+                   fims_popdy::SexStructure::kExplicitTwoSex),
+               "explicit_two_sex");
+}
+
+TEST(SexStructure, RejectsUnknownName) {
+  EXPECT_THROW(fims_popdy::SexStructureFromString("unknown"),
+               std::invalid_argument);
+}
+
+TEST(SexStructure, RejectsUnimplementedImplicitTwoSex) {
+  EXPECT_THROW(fims_popdy::SexStructureFromString("implicit_two_sex"),
+               std::invalid_argument);
+}
+
 TEST(PartitionDemand, DefaultIsPooled) {
   fims_popdy::PartitionDemand demand = fims_popdy::MakePooledPartitionDemand();
   EXPECT_TRUE(demand.is_pooled());
@@ -300,6 +332,92 @@ TEST(SexStratumSplitFactors, RejectsAreaOnlyPartitionSpec) {
   spec.axes.push_back(std::move(area_axis));
 
   EXPECT_THROW(fims_popdy::SexStratumSplitFactors(spec, 0.5),
+               std::invalid_argument);
+}
+
+TEST(ValidateStratumEntryWeights, AcceptsValidSexWeights) {
+  fims_popdy::PartitionSpec spec = fims_popdy::MakeDefaultSexPartitionSpec();
+  const std::vector<double> balanced = {0.3, 0.7};
+  const std::vector<double> all_male = {0.0, 1.0};
+  const std::vector<double> all_female = {1.0, 0.0};
+  EXPECT_NO_THROW(fims_popdy::ValidateStratumEntryWeights(spec, balanced));
+  EXPECT_NO_THROW(fims_popdy::ValidateStratumEntryWeights(spec, all_male));
+  EXPECT_NO_THROW(fims_popdy::ValidateStratumEntryWeights(spec, all_female));
+}
+
+TEST(ValidateStratumEntryWeights, RejectsWrongLength) {
+  fims_popdy::PartitionSpec spec = fims_popdy::MakeDefaultSexPartitionSpec();
+  const std::vector<double> too_short = {0.5};
+  const std::vector<double> too_long = {0.2, 0.3, 0.5};
+  EXPECT_THROW(fims_popdy::ValidateStratumEntryWeights(spec, too_short),
+               std::invalid_argument);
+  EXPECT_THROW(fims_popdy::ValidateStratumEntryWeights(spec, too_long),
+               std::invalid_argument);
+}
+
+TEST(ValidateStratumEntryWeights, RejectsNegativeWeight) {
+  fims_popdy::PartitionSpec spec = fims_popdy::MakeDefaultSexPartitionSpec();
+  const std::vector<double> negative = {-0.1, 1.1};
+  EXPECT_THROW(fims_popdy::ValidateStratumEntryWeights(spec, negative),
+               std::invalid_argument);
+}
+
+TEST(ValidateStratumEntryWeights, RejectsSumNotOne) {
+  fims_popdy::PartitionSpec spec = fims_popdy::MakeDefaultSexPartitionSpec();
+  const std::vector<double> bad_sum = {0.2, 0.2};
+  EXPECT_THROW(fims_popdy::ValidateStratumEntryWeights(spec, bad_sum),
+               std::invalid_argument);
+}
+
+TEST(MakeSexStratumEntryWeights, MatchesProportionFemaleSplit) {
+  fims_popdy::PartitionSpec spec = fims_popdy::MakeDefaultSexPartitionSpec();
+  const double p_female = 0.4;
+  const std::vector<double> weights =
+      fims_popdy::MakeSexStratumEntryWeights(spec, p_female);
+
+  ASSERT_EQ(weights.size(), 2);
+  EXPECT_DOUBLE_EQ(weights[0], p_female);
+  EXPECT_DOUBLE_EQ(weights[1], 1.0 - p_female);
+}
+
+TEST(MakeSexStratumEntryWeights, RejectsNonSexPartition) {
+  fims_popdy::PartitionSpec spec;
+  fims_popdy::Axis area_axis;
+  area_axis.name = "area";
+  area_axis.levels = {"north", "south"};
+  spec.axes.push_back(std::move(area_axis));
+
+  EXPECT_THROW(fims_popdy::MakeSexStratumEntryWeights(spec, 0.5),
+               std::invalid_argument);
+}
+
+TEST(ResolveStratumEntryWeights, EmptyUserFallsBackToSexDefault) {
+  fims_popdy::PartitionSpec spec = fims_popdy::MakeDefaultSexPartitionSpec();
+  const std::vector<double> empty;
+  const double p_female = 0.35;
+  const std::vector<double> weights =
+      fims_popdy::ResolveStratumEntryWeights(spec, empty, p_female);
+
+  ASSERT_EQ(weights.size(), 2);
+  EXPECT_DOUBLE_EQ(weights[0], p_female);
+  EXPECT_DOUBLE_EQ(weights[1], 1.0 - p_female);
+}
+
+TEST(ResolveStratumEntryWeights, NonEmptyUserOverridesSexDefault) {
+  fims_popdy::PartitionSpec spec = fims_popdy::MakeDefaultSexPartitionSpec();
+  const std::vector<double> user = {0.2, 0.8};
+  const std::vector<double> weights =
+      fims_popdy::ResolveStratumEntryWeights(spec, user, 0.5);
+
+  ASSERT_EQ(weights.size(), 2);
+  EXPECT_DOUBLE_EQ(weights[0], 0.2);
+  EXPECT_DOUBLE_EQ(weights[1], 0.8);
+}
+
+TEST(ResolveStratumEntryWeights, RejectsInvalidUserWeights) {
+  fims_popdy::PartitionSpec spec = fims_popdy::MakeDefaultSexPartitionSpec();
+  const std::vector<double> bad_sum = {0.1, 0.1};
+  EXPECT_THROW(fims_popdy::ResolveStratumEntryWeights(spec, bad_sum, 0.5),
                std::invalid_argument);
 }
 

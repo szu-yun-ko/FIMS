@@ -75,4 +75,49 @@ TEST_F(CAAEvaluateTestFixture,
   EXPECT_EQ(dq["spawning_biomass"][year], test_SSB[year]);
   EXPECT_GT(dq["spawning_biomass"][year], 0);
 }
+
+TEST_F(CAAEvaluateTestFixture,
+       ExplicitTwoSexSpawningBiomassUsesMatureBiomassByStratum) {
+  population->sex_structure = fims_popdy::SexStructure::kExplicitTwoSex;
+  this->InitializeCAA();
+  catch_at_age_model->Initialize();
+
+  size_t pop_id = population->GetId();
+  auto& dq = catch_at_age_model->GetPopulationDerivedQuantities(pop_id);
+  ASSERT_NE(dq.find("numbers_at_age_by_partition"), dq.end());
+  ASSERT_NE(dq.find("proportion_mature_at_age_by_partition"), dq.end());
+
+  const size_t naa_plane =
+      static_cast<size_t>((population->n_years + 1) * population->n_ages);
+  const int year = 4;
+  const int age = 6;
+  const int i_age_year = year * population->n_ages + age;
+
+  const double n_female = 800.0;
+  const double n_male = 1200.0;
+  dq["numbers_at_age_by_partition"][0 * naa_plane + i_age_year] = n_female;
+  dq["numbers_at_age_by_partition"][1 * naa_plane + i_age_year] = n_male;
+  dq["numbers_at_age"][i_age_year] = n_female + n_male;
+  // If p_female still entered SB, this would change the result.
+  population->proportion_female[age] = 0.9;
+
+  catch_at_age_model->CalculateMaturityAA(population, i_age_year, age);
+  dq["spawning_biomass"][year] = 0.0;
+  catch_at_age_model->CalculateSpawningBiomass(population, i_age_year, year,
+                                               age);
+
+  const double p_mature_female =
+      dq["proportion_mature_at_age_by_partition"][0 * naa_plane + i_age_year];
+  const double p_mature_male =
+      dq["proportion_mature_at_age_by_partition"][1 * naa_plane + i_age_year];
+  const double weight = population->growth->evaluate(year, population->ages[age]);
+  EXPECT_GT(p_mature_female, 0.0);
+  EXPECT_DOUBLE_EQ(p_mature_male, 0.0);
+
+  const double expected_sb = n_female * p_mature_female * weight;
+  EXPECT_DOUBLE_EQ(dq["spawning_biomass"][year], expected_sb);
+  // Male numbers must not contribute when male maturity is 0.
+  EXPECT_NE(dq["spawning_biomass"][year],
+            (n_female + n_male) * p_mature_female * weight);
+}
 }  // namespace

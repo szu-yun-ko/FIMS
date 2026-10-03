@@ -115,6 +115,60 @@ test_that("rcpp population SetPartitionDemand round-trips named lists", {
   clear()
 })
 
+test_that("sex_structure defaults and round-trips through Set/GetSexStructure", {
+  population <- methods::new(Population)
+
+  #' @description Test that sex_structure defaults to sex_ratio_at_age.
+  expect_equal(
+    object = population$GetSexStructure(),
+    expected = "sex_ratio_at_age"
+  )
+
+  population$SetSexStructure("explicit_two_sex")
+
+  #' @description Test that SetSexStructure updates GetSexStructure.
+  expect_equal(
+    object = population$GetSexStructure(),
+    expected = "explicit_two_sex"
+  )
+
+  population$SetSexStructure("sex_ratio_at_age")
+
+  #' @description Test that sex_ratio_at_age round-trips.
+  expect_equal(
+    object = population$GetSexStructure(),
+    expected = "sex_ratio_at_age"
+  )
+
+  clear()
+})
+
+test_that("init and recruit apportionment round-trip through Set/Get", {
+  population <- methods::new(Population)
+
+  #' @description Test that default apportionment vectors are empty.
+  expect_equal(population$GetInitApportionment(), numeric(0))
+  expect_equal(population$GetRecruitApportionment(), numeric(0))
+
+  #' @description Test that init apportionment round-trips.
+  expect_silent(population$SetInitApportionment(c(0.4, 0.6)))
+  expect_equal(population$GetInitApportionment(), c(0.4, 0.6))
+
+  #' @description Test that recruit apportionment round-trips.
+  expect_silent(population$SetRecruitApportionment(c(0.25, 0.75)))
+  expect_equal(population$GetRecruitApportionment(), c(0.25, 0.75))
+
+  #' @description Test that NULL clears init apportionment.
+  expect_silent(population$SetInitApportionment(NULL))
+  expect_equal(population$GetInitApportionment(), numeric(0))
+
+  #' @description Test that empty numeric clears recruit apportionment.
+  expect_silent(population$SetRecruitApportionment(numeric(0)))
+  expect_equal(population$GetRecruitApportionment(), numeric(0))
+
+  clear()
+})
+
 ## Edge handling ----
 # No Edge handling for now.
 
@@ -132,6 +186,48 @@ test_that("rcpp population SetPartitionDemand rejects invalid lists", {
   expect_error(
     population$SetPartitionDemand(list(sex = "female", sex = "male")),
     regexp = "duplicate axis"
+  )
+
+  clear()
+})
+
+test_that("SetSexStructure rejects unknown and unimplemented values", {
+  population <- methods::new(Population)
+
+  #' @description Test that unknown sex_structure names error.
+  expect_error(
+    object = population$SetSexStructure("unknown"),
+    regexp = "unknown sex_structure"
+  )
+
+  #' @description Test that implicit_two_sex is rejected until implemented.
+  expect_error(
+    object = population$SetSexStructure("implicit_two_sex"),
+    regexp = "unknown sex_structure"
+  )
+
+  clear()
+})
+
+test_that("SetInitApportionment and SetRecruitApportionment reject invalid weights", {
+  population <- methods::new(Population)
+
+  #' @description Test that wrong-length init weights error.
+  expect_error(
+    object = population$SetInitApportionment(c(0.5)),
+    regexp = "ValidateStratumEntryWeights"
+  )
+
+  #' @description Test that weights that do not sum to 1 error.
+  expect_error(
+    object = population$SetRecruitApportionment(c(0.2, 0.2)),
+    regexp = "ValidateStratumEntryWeights"
+  )
+
+  #' @description Test that negative weights error.
+  expect_error(
+    object = population$SetInitApportionment(c(-0.1, 1.1)),
+    regexp = "ValidateStratumEntryWeights"
   )
 
   clear()

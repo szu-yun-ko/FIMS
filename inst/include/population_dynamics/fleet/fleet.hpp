@@ -36,7 +36,28 @@ struct Fleet : public fims_model_object::FIMSObject<Type> {
   // selectivity
   int fleet_selectivity_id_m = -999; /*!< id of selectivity component*/
   std::shared_ptr<SelectivityBase<Type>>
-      selectivity; /*!< selectivity component*/
+      selectivity; /*!< shared selectivity used for Model 1 / pooled F */
+  /**
+   * @brief Optional selectivity by partition stratum (e.g. female, male).
+   *
+   * @details Empty means every stratum uses `selectivity`. When sized, entry
+   * `i` is used for stratum `i`; a null entry falls back to `selectivity`.
+   */
+  std::vector<std::shared_ptr<SelectivityBase<Type>>>
+      selectivity_by_partition;
+
+  /**
+   * @brief Selectivity for a partition stratum, with shared fallback.
+   * @param stratum Partition stratum index.
+   */
+  std::shared_ptr<SelectivityBase<Type>> GetSelectivityForStratum(
+      size_t stratum) const {
+    if (stratum < this->selectivity_by_partition.size() &&
+        this->selectivity_by_partition[stratum]) {
+      return this->selectivity_by_partition[stratum];
+    }
+    return this->selectivity;
+  }
 
   // age-to-length conversion model
   std::shared_ptr<AgeToLengthConversionBase<Type>>

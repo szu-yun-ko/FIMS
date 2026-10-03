@@ -39,21 +39,29 @@ initialize_module <- function(parameters, data, module_name, fleet = NA_characte
   module <- methods::new(module_class)
 
   if (module_class_name == "Population") {
+    # Derived quantities are filled by CatchAtAge, not user parameters.
+    # Partitioned life-history DQs are allocated only for explicit_two_sex.
     module_fields <- setdiff(module_fields, c(
       "log_f_multiplier",
       "spawning_biomass_ratio",
       "total_catch_weight",
       "total_catch_numbers",
       "mortality_F",
+      "mortality_F_by_partition",
       "mortality_M",
+      "mortality_M_by_partition",
       "mortality_Z",
+      "mortality_Z_by_partition",
       "numbers_at_age",
+      "numbers_at_age_by_partition",
       "unfished_numbers_at_age",
       "biomass",
       "spawning_biomass",
       "unfished_biomass",
       "unfished_spawning_biomass",
       "proportion_mature_at_age",
+      "proportion_mature_at_age_by_partition",
+      "proportion_female_at_age_year",
       "expected_recruitment",
       "sum_selectivity"
     ))
